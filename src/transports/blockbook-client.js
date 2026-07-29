@@ -23,6 +23,14 @@ const MEMPOOL_SPACE_URL = 'https://mempool.space'
 /**
  * Sums the amount leaving an address through its unconfirmed transactions.
  *
+ * Follows the same trust rule as Bitcoin Core's own wallet (see
+ * `CachedTxIsTrusted` in https://github.com/bitcoin/bitcoin/blob/master/src/wallet/receive.cpp):
+ * a pending transaction only counts if every one of its address-owned inputs
+ * is either already confirmed, or itself spends another pending transaction
+ * that is also trusted by this same rule. A transaction with even one
+ * untrusted input (e.g. mixing in an unconfirmed deposit from elsewhere) gets
+ * no credit for its own change until the whole chain resolves.
+ *
  * @param {Array<Object>} [transactions] - Transactions returned for the address.
  * @param {string} address - The bitcoin address.
  * @returns {number} Unconfirmed outgoing amount in satoshis.
@@ -32,52 +40,51 @@ function getUnconfirmedOutgoing (transactions, address) {
   const pendingTxids = new Set(pendingTxs.map(tx => tx.txid))
   const pendingTxsById = new Map(pendingTxs.map(tx => [tx.txid, tx]))
 
-  const rootedTxMap = new Map()
+  const trustedTxMap = new Map()
 
-  // A tx only counts if its money traces back to confirmed funds - directly,
-  // or by spending another pending tx that is itself rooted. A tx built
-  // entirely from other unconfirmed deposits (nothing rooted upstream) is
-  // ignored, since none of that value was ever part of the confirmed balance.
-  function isRooted (tx) {
-    if (rootedTxMap.has(tx.txid)) return rootedTxMap.get(tx.txid)
+  // Matches Bitcoin Core's own wallet policy: a pending tx is only trusted if
+  // it has an address-owned input, and every one of them is either already
+  // confirmed or chained from another trusted tx. A tx with even one
+  // untrusted input (e.g. mixing in an unconfirmed deposit from elsewhere)
+  // gets no credit for its own change until the whole thing is trusted.
+  function isTrusted (tx) {
+    if (trustedTxMap.has(tx.txid)) return trustedTxMap.get(tx.txid)
 
-    // Assume unrooted while resolving, to guard against any (invalid) cycle.
-    rootedTxMap.set(tx.txid, false)
+    // Assume untrusted while resolving, to guard against any (invalid) cycle.
+    trustedTxMap.set(tx.txid, false)
 
     const ownedVins = (tx.vin || []).filter(entry => entry.isAddress && entry.addresses?.includes(address))
 
-    const rooted = ownedVins.some(vin => {
+    const trusted = ownedVins.length > 0 && ownedVins.every(vin => {
       if (!pendingTxids.has(vin.txid)) return true // spends an already-confirmed output
 
       const parent = pendingTxsById.get(vin.txid)
-      return isRooted(parent)
+      return isTrusted(parent)
     })
 
-    rootedTxMap.set(tx.txid, rooted)
-    return rooted
+    trustedTxMap.set(tx.txid, trusted)
+    return trusted
   }
 
-  const rootedTxs = pendingTxs.filter(isRooted)
-
-  // Track every pending output that gets spent further by another rooted tx,
-  // so it's excluded from change below - only the final, unspent tip of a
-  // chain should count as change, not an intermediate hop.
+  // Track every pending output that gets spent further by another tx, so
+  // it's excluded from change below - only the final, unspent tip of a chain
+  // should count as change, not an intermediate hop.
   const consumedOutpoints = new Set()
-  for (const tx of rootedTxs) {
+  for (const tx of pendingTxs) {
     for (const vin of tx.vin || []) {
       if (pendingTxids.has(vin.txid)) consumedOutpoints.add(`${vin.txid}:${vin.vout}`)
     }
   }
 
-  return rootedTxs.reduce((total, tx) => {
-    // Exclude inputs that spend another pending tx's output - that value is
-    // already accounted for by whichever tx produced it (or was never real,
-    // if that tx isn't rooted).
+  return pendingTxs.reduce((total, tx) => {
+    // Any input spending another pending tx's output is already accounted
+    // for by whichever tx produced it - only a directly confirmed spend
+    // counts here, regardless of whether this tx is trusted.
     const vin = (tx.vin || []).filter(entry => !pendingTxids.has(entry.txid))
     const spent = sumOwnedValues(vin, address)
 
     const vout = (tx.vout || []).filter(entry => !consumedOutpoints.has(`${tx.txid}:${entry.n}`))
-    const change = sumOwnedValues(vout, address)
+    const change = isTrusted(tx) ? sumOwnedValues(vout, address) : 0
 
     return total + (spent - change)
   }, 0)

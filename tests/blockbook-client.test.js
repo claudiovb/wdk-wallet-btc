@@ -106,7 +106,7 @@ describe('BlockbookClient', () => {
       expect(balance.unconfirmedOutgoing).toBe(145000)
     })
 
-    // tx1: unconfirmed deposit of 50,000, not rooted (no vin). tx2: spends that
+    // tx1: unconfirmed deposit of 50,000, not trusted (no vin). tx2: spends that
     // same still-unconfirmed 50,000, sends 20,000, keeps 29,000 - since nothing
     // here ever touched confirmed money, the whole chain must net to zero rather
     // than going negative.
@@ -139,10 +139,11 @@ describe('BlockbookClient', () => {
       expect(balance.confirmed - balance.unconfirmedOutgoing).toBe(0)
     })
 
-    // tx1: unconfirmed deposit of 50,000, not rooted. tx2: spends a confirmed
-    // 500,000 AND that same unrooted 50,000 together, keeps 40,000 change -
-    // only the confirmed 500,000 side should count as real outgoing.
-    test('should only count the confirmed-sourced input when a pending send mixes a confirmed and a chained input', async () => {
+    // tx1: unconfirmed deposit of 50,000, not trusted. tx2: spends a confirmed
+    // 500,000 AND that same untrusted 50,000 together, keeps 40,000 change -
+    // the confirmed 500,000 is still spent regardless, but since not every
+    // input is trusted, none of tx2's own change counts yet.
+    test('should not credit change from a tx that mixes a confirmed input with an untrusted one, even though the confirmed spend still counts', async () => {
       fetchMock.mockResolvedValueOnce(mockBlockbookAddress({
         balance: '500000',
         unconfirmedBalance: '460000',
@@ -170,13 +171,14 @@ describe('BlockbookClient', () => {
 
       const balance = await client.getBalance(ADDRESS)
 
-      expect(balance.unconfirmedOutgoing).toBe(460000)
+      expect(balance.unconfirmedOutgoing).toBe(500000)
+      expect(balance.confirmed - balance.unconfirmedOutgoing).toBe(0)
     })
 
     // tx1: spends confirmed 1,000,000, sends 300,000, keeps 700,000 change.
     // tx3: spends that same 700,000, sends 400,000, keeps 300,000 - tx3's
     // further spend must reduce the balance too, not just tx1's own portion.
-    test('should subtract a further pending spend of a rooted change output instead of double-crediting it', async () => {
+    test('should subtract a further pending spend of a trusted change output instead of double-crediting it', async () => {
       fetchMock.mockResolvedValueOnce(mockBlockbookAddress({
         balance: '1000000',
         unconfirmedBalance: '-700000',
@@ -211,7 +213,7 @@ describe('BlockbookClient', () => {
     // tx1: spends confirmed 300,000, keeps 200,000 change. tx4: spends a
     // separate confirmed 500,000 AND tx1's 200,000 change together, keeps
     // 150,000 - both inputs are real, so both should count.
-    test('should count both a direct confirmed input and a chained input from another rooted transaction', async () => {
+    test('should count both a direct confirmed input and a chained input from another trusted transaction', async () => {
       fetchMock.mockResolvedValueOnce(mockBlockbookAddress({
         balance: '800000',
         unconfirmedBalance: '-650000',
@@ -246,7 +248,7 @@ describe('BlockbookClient', () => {
       expect(balance.confirmed - balance.unconfirmedOutgoing).toBe(150000)
     })
 
-    // t1: unconfirmed deposit, not rooted. t2 spends t1's output, t3 spends
+    // t1: unconfirmed deposit, not trusted. t2 spends t1's output, t3 spends
     // t2's output - the whole 3-hop chain never touches confirmed money, so
     // it must net to zero however many hops deep it goes.
     test('should ignore a multi-hop chain of pending transactions that never touches confirmed money', async () => {
@@ -285,6 +287,88 @@ describe('BlockbookClient', () => {
 
       expect(balance.unconfirmedOutgoing).toBe(0)
       expect(balance.confirmed - balance.unconfirmedOutgoing).toBe(0)
+    })
+
+    // A tx spends a confirmed 5,000 alongside an unconfirmed deposit from
+    // elsewhere (10,000), keeping 9,000 change. Since not every input is
+    // trusted, none of this tx's own change counts yet - only the confirmed
+    // 5,000 it spent is reflected, dropping the balance to 0 until the whole
+    // thing (including the deposit) actually confirms.
+    test('should not credit any change from a tx that mixes confirmed money with an untrusted deposit', async () => {
+      fetchMock.mockResolvedValueOnce(mockBlockbookAddress({
+        balance: '5000',
+        unconfirmedBalance: '4000',
+        transactions: [
+          {
+            txid: 'dep',
+            blockHeight: -1,
+            vin: [{ isAddress: true, addresses: ['someone-else'], value: '10000', txid: 'prev-dep' }],
+            vout: [{ isAddress: true, addresses: [ADDRESS], value: '10000', n: 0 }]
+          },
+          {
+            txid: 'mixed',
+            blockHeight: -1,
+            vin: [
+              { isAddress: true, addresses: [ADDRESS], value: '5000', txid: 'confirmed-A' },
+              { isAddress: true, addresses: [ADDRESS], value: '10000', txid: 'dep', vout: 0 }
+            ],
+            vout: [
+              { isAddress: true, addresses: [ADDRESS], value: '9000', n: 0 },
+              { isAddress: true, addresses: ['ext'], value: '6000', n: 1 }
+            ]
+          }
+        ]
+      }))
+
+      const balance = await client.getBalance(ADDRESS)
+
+      expect(balance.unconfirmedOutgoing).toBe(5000)
+      expect(balance.confirmed - balance.unconfirmedOutgoing).toBe(0)
+    })
+
+    // Same mixed tx as above, but alongside a second, unrelated fully-trusted
+    // send (confirmed 100,000 -> 80,000 out, 20,000 change). Each transaction
+    // must be counted independently - the untrusted mixed tx still only loses
+    // its confirmed 5,000, while the separate trusted send is counted in full.
+    test('should count a partially-untrusted tx and a separate fully-trusted tx independently', async () => {
+      fetchMock.mockResolvedValueOnce(mockBlockbookAddress({
+        balance: '105000',
+        unconfirmedBalance: '84000',
+        transactions: [
+          {
+            txid: 'dep',
+            blockHeight: -1,
+            vin: [{ isAddress: true, addresses: ['someone-else'], value: '10000', txid: 'prev-dep' }],
+            vout: [{ isAddress: true, addresses: [ADDRESS], value: '10000', n: 0 }]
+          },
+          {
+            txid: 'mixed',
+            blockHeight: -1,
+            vin: [
+              { isAddress: true, addresses: [ADDRESS], value: '5000', txid: 'confirmed-A' },
+              { isAddress: true, addresses: [ADDRESS], value: '10000', txid: 'dep', vout: 0 }
+            ],
+            vout: [
+              { isAddress: true, addresses: [ADDRESS], value: '9000', n: 0 },
+              { isAddress: true, addresses: ['ext'], value: '6000', n: 1 }
+            ]
+          },
+          {
+            txid: 'other',
+            blockHeight: -1,
+            vin: [{ isAddress: true, addresses: [ADDRESS], value: '100000', txid: 'confirmed-B' }],
+            vout: [
+              { isAddress: true, addresses: [ADDRESS], value: '20000', n: 0 },
+              { isAddress: true, addresses: ['ext2'], value: '80000', n: 1 }
+            ]
+          }
+        ]
+      }))
+
+      const balance = await client.getBalance(ADDRESS)
+
+      expect(balance.unconfirmedOutgoing).toBe(85000)
+      expect(balance.confirmed - balance.unconfirmedOutgoing).toBe(20000)
     })
 
     test('should ignore confirmed transactions when computing the outgoing amount', async () => {

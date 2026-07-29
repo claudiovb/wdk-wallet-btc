@@ -26,6 +26,8 @@ import { address as btcAddress, crypto } from 'bitcoinjs-lib'
  * @property {number} confirmed - Confirmed balance in satoshis.
  * @property {number} [unconfirmed] - Unconfirmed balance in satoshis.
  * @property {number} [unconfirmedOutgoing] - Amount leaving the address through unconfirmed transactions, in satoshis.
+ *   Clients that implement this should follow the same trust rule as {@link BlockbookClient}'s `getUnconfirmedOutgoing`,
+ *   so `getBalance()` behaves consistently regardless of which client backs it.
  */
 
 /**
