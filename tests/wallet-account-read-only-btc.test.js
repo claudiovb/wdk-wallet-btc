@@ -193,6 +193,63 @@ describe.each([44, 84])('WalletAccountReadOnlyBtc', (bip) => {
     })
   })
 
+  describe('getTransaction', () => {
+    let txid
+
+    beforeAll(() => {
+      txid = bitcoin.sendToAddress(ADDRESSES[bip], 0.005)
+    })
+
+    test('should report pending for an unconfirmed transaction', async () => {
+      let info = null
+      const start = Date.now()
+
+      while (Date.now() - start < 15_000) {
+        info = await account.getTransaction(txid)
+        if (info) break
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+
+      expect(info).not.toBeNull()
+      expect(info.finality).toBe('pending')
+      expect(info.success).toBeNull()
+      expect(info.confirmations).toBe(0)
+      expect(info.transaction).toBeDefined()
+    })
+
+    test('should report confirmed after one confirmation', async () => {
+      await waiter.mine(1)
+
+      const info = await account.getTransaction(txid)
+
+      expect(info.finality).toBe('confirmed')
+      expect(info.success).toBe(true)
+      expect(info.confirmations).toBe(1)
+      expect(typeof info.blockRef).toBe('number')
+      expect(info.transaction).toBeDefined()
+    })
+
+    test('should report final after six confirmations', async () => {
+      await waiter.mine(5)
+
+      const info = await account.getTransaction(txid)
+
+      expect(info.finality).toBe('final')
+      expect(info.confirmations).toBeGreaterThanOrEqual(6)
+    })
+
+    test('should return null for an unknown transaction', async () => {
+      const info = await account.getTransaction('f'.repeat(64))
+
+      expect(info).toBeNull()
+    })
+
+    test('should throw on a malformed transaction hash', async () => {
+      await expect(account.getTransaction('not-a-hash'))
+        .rejects.toThrow("The 'getTransaction(hash)' method requires a valid transaction hash.")
+    })
+  })
+
   describe('verify', () => {
     test('should return true for a valid signature', async () => {
         const result = await account.verify(MESSAGE, SIGNATURES[bip])

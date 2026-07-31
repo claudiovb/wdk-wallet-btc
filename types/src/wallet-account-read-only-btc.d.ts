@@ -78,10 +78,30 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
     /**
      * Returns a transaction's receipt.
      *
+     * @deprecated Use {@link getTransaction} instead, which returns a normalized, finality-based receipt. The raw bitcoinjs transaction remains available on its `transaction` property.
      * @param {string} hash - The transaction's hash.
      * @returns {Promise<BtcTransactionReceipt | null>} – The receipt, or null if the transaction has not been included in a block yet.
      */
     getTransactionReceipt(hash: string): Promise<BtcTransactionReceipt | null>;
+    /**
+     * Returns a normalized, finality-based receipt for a transaction.
+     *
+     * @param {string} hash - The transaction's hash.
+     * @returns {Promise<BtcTransactionInfo | null>} The normalized receipt, or null if the transaction is not known.
+     */
+    getTransaction(hash: string): Promise<BtcTransactionInfo | null>;
+    /**
+     * Returns the confirmation depth for a transaction included at the given block height, or null when the chain tip can't be resolved.
+     *
+     * @protected
+     * @param {number} height - The block height the transaction was included in.
+     * @returns {Promise<number | null>} The confirmation depth, or null.
+     */
+    protected _getConfirmations(height: number): Promise<number | null>;
+    /** @protected @type {number} */
+    protected get _defaultWaitInterval(): number;
+    /** @protected @type {number} */
+    protected get _defaultWaitTimeout(): number;
     /**
      * Returns the maximum spendable amount (in satoshis) that can be sent in
      * a single transaction, after subtracting estimated transaction fees.
@@ -162,6 +182,14 @@ export type BtcTransactionReceipt = import("bitcoinjs-lib").Transaction;
 export type TransactionResult = import("@tetherto/wdk-wallet").TransactionResult;
 export type TransferOptions = import("@tetherto/wdk-wallet").TransferOptions;
 export type TransferResult = import("@tetherto/wdk-wallet").TransferResult;
+export type TransactionReceipt = import("@tetherto/wdk-wallet").TransactionReceipt;
+/**
+ * A normalized bitcoin transaction receipt, extended with the confirmation depth and the native bitcoinjs transaction.
+ */
+export type BtcTransactionInfo = TransactionReceipt & {
+    confirmations: number | null;
+    transaction: BtcTransactionReceipt;
+};
 export type BtcTransaction = {
     /**
      * - The transaction's recipient.

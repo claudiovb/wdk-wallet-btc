@@ -169,6 +169,16 @@ export default class MempoolElectrumClient {
   }
 
   /**
+   * Returns the height of the current best block.
+   *
+   * @returns {Promise<number>} The current block height.
+   */
+  async getBlockHeight () {
+    const header = await this._client.blockchainHeaders_subscribe()
+    return header.height
+  }
+
+  /**
    * Returns a raw transaction.
    *
    * @param {string} txHash - The transaction hash.

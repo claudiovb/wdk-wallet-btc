@@ -8,6 +8,7 @@ export type TransactionResult = import("@tetherto/wdk-wallet").TransactionResult
 export type TransferOptions = import("@tetherto/wdk-wallet").TransferOptions;
 export type TransferResult = import("@tetherto/wdk-wallet").TransferResult;
 export type BtcTransaction = import("./src/wallet-account-read-only-btc.js").BtcTransaction;
+export type BtcTransactionInfo = import("./src/wallet-account-read-only-btc.js").BtcTransactionInfo;
 export type BtcWalletConfig = import("./src/wallet-account-read-only-btc.js").BtcWalletConfig;
 export type BtcMaxSpendableResult = import("./src/wallet-account-read-only-btc.js").BtcMaxSpendableResult;
 export type BtcTransfer = import("./src/wallet-account-btc.js").BtcTransfer;

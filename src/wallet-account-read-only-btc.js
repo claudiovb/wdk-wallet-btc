@@ -44,6 +44,16 @@ const bitcoinMessage = MessageFactory(ecc)
 /** @typedef {import('@tetherto/wdk-wallet').TransactionResult} TransactionResult */
 /** @typedef {import('@tetherto/wdk-wallet').TransferOptions} TransferOptions */
 /** @typedef {import('@tetherto/wdk-wallet').TransferResult} TransferResult */
+/** @typedef {import('@tetherto/wdk-wallet').TransactionReceipt} TransactionReceipt */
+
+/**
+ * A normalized bitcoin transaction receipt, extended with the confirmation depth and the native bitcoinjs transaction.
+ *
+ * @typedef {TransactionReceipt & {
+ *   confirmations: number | null,
+ *   transaction: BtcTransactionReceipt
+ * }} BtcTransactionInfo
+ */
 
 /**
  * @typedef {Object} BtcTransaction
@@ -98,6 +108,7 @@ const { Output } = DescriptorsFactory(ecc)
 
 const MIN_TX_FEE_SATS = 141
 const MAX_UTXO_INPUTS = 200
+const FINAL_CONFIRMATIONS = 6
 
 const BIP_BY_ADDRESS_PREFIX = {
   1: 44,
@@ -241,6 +252,7 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
   /**
    * Returns a transaction's receipt.
    *
+   * @deprecated Use {@link getTransaction} instead, which returns a normalized, finality-based receipt. The raw bitcoinjs transaction remains available on its `transaction` property.
    * @param {string} hash - The transaction's hash.
    * @returns {Promise<BtcTransactionReceipt | null>} – The receipt, or null if the transaction has not been included in a block yet.
    */
@@ -264,6 +276,82 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
     const transaction = Transaction.fromHex(hex)
 
     return transaction
+  }
+
+  /**
+   * Returns a normalized, finality-based receipt for a transaction.
+   *
+   * @param {string} hash - The transaction's hash.
+   * @returns {Promise<BtcTransactionInfo | null>} The normalized receipt, or null if the transaction is not known.
+   */
+  async getTransaction (hash) {
+    if (!/^[0-9a-fA-F]{64}$/.test(hash)) {
+      throw new Error("The 'getTransaction(hash)' method requires a valid transaction hash.")
+    }
+
+    await this._ensureConnected()
+
+    const address = await this.getAddress()
+    const history = await this._client.getHistory(address)
+    const item = Array.isArray(history) ? history.find(h => h?.tx_hash === hash) : null
+
+    if (!item) {
+      return null
+    }
+
+    const transaction = Transaction.fromHex(await this._client.getTransaction(hash))
+
+    if (!item.height || item.height <= 0) {
+      return {
+        id: hash,
+        finality: 'pending',
+        success: null,
+        confirmations: 0,
+        transaction
+      }
+    }
+
+    const confirmations = await this._getConfirmations(item.height)
+
+    return {
+      id: hash,
+      finality: confirmations !== null && confirmations >= FINAL_CONFIRMATIONS ? 'final' : 'confirmed',
+      success: true,
+      blockRef: item.height,
+      confirmations,
+      transaction
+    }
+  }
+
+  /**
+   * Returns the confirmation depth for a transaction included at the given block height, or null when the chain tip can't be resolved.
+   *
+   * @protected
+   * @param {number} height - The block height the transaction was included in.
+   * @returns {Promise<number | null>} The confirmation depth, or null.
+   */
+  async _getConfirmations (height) {
+    if (typeof this._client.getBlockHeight !== 'function') {
+      return null
+    }
+
+    const tip = await this._client.getBlockHeight()
+
+    if (!tip || tip < height) {
+      return null
+    }
+
+    return tip - height + 1
+  }
+
+  /** @protected @type {number} */
+  get _defaultWaitInterval () {
+    return 30000
+  }
+
+  /** @protected @type {number} */
+  get _defaultWaitTimeout () {
+    return 3600000
   }
 
   /**

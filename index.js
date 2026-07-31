@@ -22,6 +22,7 @@
 /** @typedef {import('@tetherto/wdk-wallet').TransferResult} TransferResult */
 
 /** @typedef {import('./src/wallet-account-read-only-btc.js').BtcTransaction} BtcTransaction */
+/** @typedef {import('./src/wallet-account-read-only-btc.js').BtcTransactionInfo} BtcTransactionInfo */
 /** @typedef {import('./src/wallet-account-read-only-btc.js').BtcWalletConfig} BtcWalletConfig */
 /** @typedef {import('./src/wallet-account-read-only-btc.js').BtcMaxSpendableResult} BtcMaxSpendableResult */
 /** @typedef {import('./src/wallet-account-btc.js').BtcTransfer} BtcTransfer */
