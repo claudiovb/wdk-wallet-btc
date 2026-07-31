@@ -43,7 +43,9 @@ function getUnconfirmedOutgoing (transactions, address) {
   const trustedTxMap = new Map()
 
   // Matches Bitcoin Core's own wallet policy: a pending tx is only trusted if
-  // it has an address-owned input, and every one of them is either already
+  // every one of its inputs is address-owned (not just some of them - a tx
+  // with even one input belonging to someone else, e.g. a shared or
+  // multi-party transaction, is untrusted), and each is either already
   // confirmed or chained from another trusted tx. A tx with even one
   // untrusted input (e.g. mixing in an unconfirmed deposit from elsewhere)
   // gets no credit for its own change until the whole thing is trusted.
@@ -53,9 +55,10 @@ function getUnconfirmedOutgoing (transactions, address) {
     // Assume untrusted while resolving, to guard against any (invalid) cycle.
     trustedTxMap.set(tx.txid, false)
 
-    const ownedVins = (tx.vin || []).filter(entry => entry.isAddress && entry.addresses?.includes(address))
+    const vins = tx.vin || []
+    const ownedVins = vins.filter(entry => entry.isAddress && entry.addresses?.includes(address))
 
-    const trusted = ownedVins.length > 0 && ownedVins.every(vin => {
+    const trusted = vins.length > 0 && ownedVins.length === vins.length && ownedVins.every(vin => {
       if (!pendingTxids.has(vin.txid)) return true // spends an already-confirmed output
 
       const parent = pendingTxsById.get(vin.txid)

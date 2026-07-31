@@ -220,8 +220,10 @@ describe('WalletAccountReadOnlyBtc getBalance formula', () => {
   }
 
   test('should subtract unconfirmedOutgoing when the client reports it', async () => {
-    const account = new WalletAccountReadOnlyBtc(ADDRESSES[84], { network: 'regtest' })
-    account._client = stubClient({ confirmed: 100_000, unconfirmed: 999_999, unconfirmedOutgoing: 30_000 })
+    const account = new WalletAccountReadOnlyBtc(ADDRESSES[84], {
+      network: 'regtest',
+      client: stubClient({ confirmed: 100_000, unconfirmed: 999_999, unconfirmedOutgoing: 30_000 })
+    })
 
     const balance = await account.getBalance()
 
@@ -229,8 +231,10 @@ describe('WalletAccountReadOnlyBtc getBalance formula', () => {
   })
 
   test('should fall back to netting the raw unconfirmed balance when the client does not report unconfirmedOutgoing', async () => {
-    const account = new WalletAccountReadOnlyBtc(ADDRESSES[84], { network: 'regtest' })
-    account._client = stubClient({ confirmed: 100_000, unconfirmed: -30_000 })
+    const account = new WalletAccountReadOnlyBtc(ADDRESSES[84], {
+      network: 'regtest',
+      client: stubClient({ confirmed: 100_000, unconfirmed: -30_000 })
+    })
 
     const balance = await account.getBalance()
 

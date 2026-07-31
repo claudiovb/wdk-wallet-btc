@@ -371,6 +371,35 @@ describe('BlockbookClient', () => {
       expect(balance.confirmed - balance.unconfirmedOutgoing).toBe(20000)
     })
 
+    // A tx spends a confirmed 500,000 of ours AND an unrelated third party's
+    // 200,000 input together, keeping 300,000 change. Even though our own
+    // input is directly confirmed, the tx as a whole isn't trusted (it has an
+    // input that was never ours at all) - so the confirmed 500,000 still
+    // counts as spent, but none of the change is credited yet.
+    test('should not trust a tx that mixes our confirmed input with an unrelated third party\'s input', async () => {
+      fetchMock.mockResolvedValueOnce(mockBlockbookAddress({
+        balance: '500000',
+        unconfirmedBalance: '200000',
+        transactions: [{
+          txid: 'shared',
+          blockHeight: -1,
+          vin: [
+            { isAddress: true, addresses: [ADDRESS], value: '500000', txid: 'confirmed-A' },
+            { isAddress: true, addresses: ['someone-else'], value: '200000', txid: 'foreign-prev' }
+          ],
+          vout: [
+            { isAddress: true, addresses: [ADDRESS], value: '300000', n: 0 },
+            { isAddress: true, addresses: ['someone-else'], value: '400000', n: 1 }
+          ]
+        }]
+      }))
+
+      const balance = await client.getBalance(ADDRESS)
+
+      expect(balance.unconfirmedOutgoing).toBe(500000)
+      expect(balance.confirmed - balance.unconfirmedOutgoing).toBe(0)
+    })
+
     test('should ignore confirmed transactions when computing the outgoing amount', async () => {
       fetchMock.mockResolvedValueOnce(mockBlockbookAddress({
         balance: '100000',
