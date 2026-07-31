@@ -21,6 +21,90 @@
 const MEMPOOL_SPACE_URL = 'https://mempool.space'
 
 /**
+ * Sums the amount leaving an address through its unconfirmed transactions.
+ *
+ * Follows the same trust rule as Bitcoin Core's own wallet (see
+ * `CachedTxIsTrusted` in https://github.com/bitcoin/bitcoin/blob/master/src/wallet/receive.cpp):
+ * a pending transaction only counts if every one of its address-owned inputs
+ * is either already confirmed, or itself spends another pending transaction
+ * that is also trusted by this same rule. A transaction with even one
+ * untrusted input (e.g. mixing in an unconfirmed deposit from elsewhere) gets
+ * no credit for its own change until the whole chain resolves.
+ *
+ * @param {Array<Object>} [transactions] - Transactions returned for the address.
+ * @param {string} address - The bitcoin address.
+ * @returns {number} Unconfirmed outgoing amount in satoshis.
+ */
+function getUnconfirmedOutgoing (transactions, address) {
+  const pendingTxs = (transactions || []).filter(tx => tx.blockHeight === -1)
+  const pendingTxids = new Set(pendingTxs.map(tx => tx.txid))
+  const pendingTxsById = new Map(pendingTxs.map(tx => [tx.txid, tx]))
+
+  const trustedTxMap = new Map()
+
+  // Matches Bitcoin Core's own wallet policy: a pending tx is only trusted if
+  // every one of its inputs is address-owned (not just some of them - a tx
+  // with even one input belonging to someone else, e.g. a shared or
+  // multi-party transaction, is untrusted), and each is either already
+  // confirmed or chained from another trusted tx. A tx with even one
+  // untrusted input (e.g. mixing in an unconfirmed deposit from elsewhere)
+  // gets no credit for its own change until the whole thing is trusted.
+  function isTrusted (tx) {
+    if (trustedTxMap.has(tx.txid)) return trustedTxMap.get(tx.txid)
+
+    // Assume untrusted while resolving, to guard against any (invalid) cycle.
+    trustedTxMap.set(tx.txid, false)
+
+    const vins = tx.vin || []
+    const ownedVins = vins.filter(entry => entry.isAddress && entry.addresses?.includes(address))
+
+    const trusted = vins.length > 0 && ownedVins.length === vins.length && ownedVins.every(vin => {
+      if (!pendingTxids.has(vin.txid)) return true // spends an already-confirmed output
+
+      const parent = pendingTxsById.get(vin.txid)
+      return isTrusted(parent)
+    })
+
+    trustedTxMap.set(tx.txid, trusted)
+    return trusted
+  }
+
+  // Track every pending output that gets spent further by another tx, so
+  // it's excluded from change below - only the final, unspent tip of a chain
+  // should count as change, not an intermediate hop.
+  const consumedOutpoints = new Set()
+  for (const tx of pendingTxs) {
+    for (const vin of tx.vin || []) {
+      if (pendingTxids.has(vin.txid)) consumedOutpoints.add(`${vin.txid}:${vin.vout}`)
+    }
+  }
+
+  return pendingTxs.reduce((total, tx) => {
+    // Any input spending another pending tx's output is already accounted
+    // for by whichever tx produced it - only a directly confirmed spend
+    // counts here, regardless of whether this tx is trusted.
+    const vin = (tx.vin || []).filter(entry => !pendingTxids.has(entry.txid))
+    const spent = sumOwnedValues(vin, address)
+
+    const vout = (tx.vout || []).filter(entry => !consumedOutpoints.has(`${tx.txid}:${entry.n}`))
+    const change = isTrusted(tx) ? sumOwnedValues(vout, address) : 0
+
+    return total + (spent - change)
+  }, 0)
+}
+
+/**
+ * @param {Array<Object>} [entries] - Transaction vin or vout entries.
+ * @param {string} address - The bitcoin address.
+ * @returns {number} Sum of entry values belonging to the address.
+ */
+function sumOwnedValues (entries, address) {
+  return (entries || [])
+    .filter(entry => entry.isAddress && entry.addresses?.includes(address))
+    .reduce((total, entry) => total + Number(entry.value), 0)
+}
+
+/**
  * @typedef {Object} BlockbookClientConfig
  * @property {string} url - The Blockbook server API base URL (e.g., 'https://btc1.trezor.io/api').
  */
@@ -77,11 +161,14 @@ export default class BlockbookClient {
    * @returns {Promise<BtcBalance>} The balance information.
    */
   async getBalance (address) {
-    const data = await this._get(`/v2/address/${address}?details=basic`)
+    const data = await this._get(`/v2/address/${address}?details=txs`)
+
+    const unconfirmedOutgoing = getUnconfirmedOutgoing(data.transactions, address)
 
     return {
       confirmed: Number(data.balance),
-      unconfirmed: Number(data.unconfirmedBalance)
+      unconfirmed: Number(data.unconfirmedBalance),
+      unconfirmedOutgoing
     }
   }
 
