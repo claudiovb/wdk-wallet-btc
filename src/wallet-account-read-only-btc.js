@@ -303,7 +303,7 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
 
     if (!item.height || item.height <= 0) {
       return {
-        id: hash,
+        hash,
         finality: 'pending',
         confirmations: 0,
         transaction
@@ -313,7 +313,7 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
     const confirmations = await this._getConfirmations(item.height)
 
     return {
-      id: hash,
+      hash,
       finality: confirmations !== null && confirmations >= FINAL_CONFIRMATIONS ? 'final' : 'confirmed',
       success: true,
       block: item.height,
