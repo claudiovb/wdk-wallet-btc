@@ -305,7 +305,6 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
       return {
         id: hash,
         finality: 'pending',
-        success: null,
         confirmations: 0,
         transaction
       }
@@ -317,7 +316,7 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
       id: hash,
       finality: confirmations !== null && confirmations >= FINAL_CONFIRMATIONS ? 'final' : 'confirmed',
       success: true,
-      blockRef: item.height,
+      block: item.height,
       confirmations,
       transaction
     }

@@ -212,7 +212,7 @@ describe.each([44, 84])('WalletAccountReadOnlyBtc', (bip) => {
 
       expect(info).not.toBeNull()
       expect(info.finality).toBe('pending')
-      expect(info.success).toBeNull()
+      expect(info.success).toBeUndefined()
       expect(info.confirmations).toBe(0)
       expect(info.transaction).toBeDefined()
     })
@@ -225,7 +225,7 @@ describe.each([44, 84])('WalletAccountReadOnlyBtc', (bip) => {
       expect(info.finality).toBe('confirmed')
       expect(info.success).toBe(true)
       expect(info.confirmations).toBe(1)
-      expect(typeof info.blockRef).toBe('number')
+      expect(typeof info.block).toBe('number')
       expect(info.transaction).toBeDefined()
     })
 
