@@ -5,6 +5,7 @@ import { HOST, PORT, ELECTRUM_PORT, ZMQ_PORT, DATA_DIR } from './config.js'
 import { BitcoinCli, Waiter } from './helpers/index.js'
 
 import { WalletAccountReadOnlyBtc } from '../index.js'
+import { NoSuchElementError, ValueError } from '@tetherto/wdk-wallet'
 
 const ADDRESSES = {
   // 0'/0/404
@@ -205,8 +206,12 @@ describe.each([44, 84])('WalletAccountReadOnlyBtc', (bip) => {
       const start = Date.now()
 
       while (Date.now() - start < 15_000) {
-        info = await account.getTransaction(txid)
-        if (info) break
+        try {
+          info = await account.getTransaction(txid)
+          break
+        } catch (err) {
+          if (!(err instanceof NoSuchElementError)) throw err
+        }
         await new Promise(resolve => setTimeout(resolve, 500))
       }
 
@@ -238,15 +243,13 @@ describe.each([44, 84])('WalletAccountReadOnlyBtc', (bip) => {
       expect(info.confirmations).toBeGreaterThanOrEqual(6)
     })
 
-    test('should return null for an unknown transaction', async () => {
-      const info = await account.getTransaction('f'.repeat(64))
-
-      expect(info).toBeNull()
+    test('should throw NoSuchElementError for an unknown transaction', async () => {
+      await expect(account.getTransaction('f'.repeat(64))).rejects.toThrow(NoSuchElementError)
     })
 
-    test('should throw on a malformed transaction hash', async () => {
+    test('should throw ValueError on a malformed transaction hash', async () => {
       await expect(account.getTransaction('not-a-hash'))
-        .rejects.toThrow("The 'getTransaction(hash)' method requires a valid transaction hash.")
+        .rejects.toThrow(ValueError)
     })
   })
 

@@ -14,7 +14,7 @@
 
 'use strict'
 
-import { WalletAccountReadOnly } from '@tetherto/wdk-wallet'
+import { WalletAccountReadOnly, NoSuchElementError, ValueError } from '@tetherto/wdk-wallet'
 
 import { coinselect } from '@bitcoinerlab/coinselect'
 import { DescriptorsFactory } from '@bitcoinerlab/descriptors'
@@ -282,11 +282,13 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
    * Returns a normalized, finality-based receipt for a transaction.
    *
    * @param {string} hash - The transaction's hash.
-   * @returns {Promise<BtcTransactionInfo | null>} The normalized receipt, or null if the transaction is not known.
+   * @returns {Promise<BtcTransactionInfo>} The normalized receipt.
+   * @throws {ValueError} If the hash is not a valid transaction hash.
+   * @throws {NoSuchElementError} If no transaction has been found for the given hash.
    */
   async getTransaction (hash) {
     if (!/^[0-9a-fA-F]{64}$/.test(hash)) {
-      throw new Error("The 'getTransaction(hash)' method requires a valid transaction hash.")
+      throw new ValueError("The 'getTransaction(hash)' method requires a valid transaction hash.")
     }
 
     await this._ensureConnected()
@@ -296,7 +298,7 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
     const item = Array.isArray(history) ? history.find(h => h?.tx_hash === hash) : null
 
     if (!item) {
-      return null
+      throw new NoSuchElementError(`No transaction found for '${hash}'.`)
     }
 
     const transaction = Transaction.fromHex(await this._client.getTransaction(hash))

@@ -87,9 +87,11 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
      * Returns a normalized, finality-based receipt for a transaction.
      *
      * @param {string} hash - The transaction's hash.
-     * @returns {Promise<BtcTransactionInfo | null>} The normalized receipt, or null if the transaction is not known.
+     * @returns {Promise<BtcTransactionInfo>} The normalized receipt.
+     * @throws {ValueError} If the hash is not a valid transaction hash.
+     * @throws {NoSuchElementError} If no transaction has been found for the given hash.
      */
-    getTransaction(hash: string): Promise<BtcTransactionInfo | null>;
+    getTransaction(hash: string): Promise<BtcTransactionInfo>;
     /**
      * Returns the confirmation depth for a transaction included at the given block height, or null when the chain tip can't be resolved.
      *
