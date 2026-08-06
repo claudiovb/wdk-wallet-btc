@@ -101,9 +101,9 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
      */
     protected _getConfirmations(height: number): Promise<number | null>;
     /** @protected @type {number} */
-    protected get _defaultWaitInterval(): number;
+    protected static _DEFAULT_WAIT_INTERVAL: number;
     /** @protected @type {number} */
-    protected get _defaultWaitTimeout(): number;
+    protected static _DEFAULT_WAIT_TIMEOUT: number;
     /**
      * Returns the maximum spendable amount (in satoshis) that can be sent in
      * a single transaction, after subtracting estimated transaction fees.

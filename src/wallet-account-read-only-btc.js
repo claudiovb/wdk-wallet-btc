@@ -346,14 +346,10 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
   }
 
   /** @protected @type {number} */
-  get _defaultWaitInterval () {
-    return 30000
-  }
+  static _DEFAULT_WAIT_INTERVAL = 30000
 
   /** @protected @type {number} */
-  get _defaultWaitTimeout () {
-    return 3600000
-  }
+  static _DEFAULT_WAIT_TIMEOUT = 3600000
 
   /**
    * Returns an estimation of the maximum spendable amount (in satoshis) that can be sent in
