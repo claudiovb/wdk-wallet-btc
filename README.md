@@ -354,8 +354,6 @@ new WalletAccountBtc(seed, path, config)
 | `quoteSendTransaction(options)` | Estimates the fee for a transaction | `Promise<{fee: bigint}>` |
 | `getTransfers(options?)` | Returns the account's transfer history | `Promise<BtcTransfer[]>` |
 | `getTransactionReceipt(hash)` | Returns a transaction's receipt | `Promise<BtcTransaction \| null>` |
-| `getTransaction(hash)` | Returns a normalized, finality-based transaction receipt | `Promise<BtcTransactionInfo>` |
-| `waitForTransaction(hash, options?)` | Polls until the transaction reaches the target finality (or times out) | `Promise<BtcTransactionInfo>` |
 | `getMaxSpendable()` | Returns the maximum spendable amount | `Promise<{amount: bigint, fee: bigint, changeValue: bigint}>` |
 | `sign(message)` | Signs a message with the account's private key | `Promise<string>` |
 | `verify(message, signature)` | Verifies a message signature | `Promise<boolean>` |
@@ -463,41 +461,6 @@ if (receipt) {
 }
 ```
 
-##### `getTransaction(hash)`
-Returns a normalized, finality-based receipt that maps Bitcoin's native state onto a common cross-chain shape (`finality`, `success`, `block`, `fee`, plus the raw transaction).
-
-**Parameters:**
-- `hash` (string): The transaction hash (64 hex characters)
-
-**Returns:** `Promise<BtcTransactionInfo>` - The normalized receipt
-
-**Throws:** `NoSuchElementError` if no transaction is found for the given hash.
-
-**Example:**
-```javascript
-const receipt = await account.getTransaction('abc123...')
-console.log(receipt.finality, receipt.block)
-```
-
-##### `waitForTransaction(hash, options?)`
-Polls `getTransaction` until the transaction reaches the requested finality target, then returns the terminal receipt. Only throws on timeout — callers inspect `finality`/`success` on the returned receipt rather than catching errors for failed or dropped transactions.
-
-**Parameters:**
-- `hash` (string): The transaction hash (64 hex characters)
-- `options` (object, optional):
-  - `target` (string, optional): `'confirmed'` or `'final'` (default: `'confirmed'`)
-  - `timeout` (number, optional): Total time budget in ms (default: `3600000`)
-  - `interval` (number, optional): Poll cadence in ms (default: `30000`)
-
-**Returns:** `Promise<BtcTransactionInfo>` - The terminal receipt once the target is reached
-
-**Throws:** `TimeoutError` if the target is not reached before the timeout.
-
-**Example:**
-```javascript
-const receipt = await account.waitForTransaction('abc123...', { target: 'final' })
-```
-
 ##### `getMaxSpendable()`
 Returns the maximum spendable amount that can be sent in a single transaction. The maximum spendable amount can differ from the wallet's total balance for several reasons:
 - **Transaction fees**: Fees are subtracted from the total balance
@@ -601,8 +564,6 @@ new WalletAccountReadOnlyBtc(address, config)
 | `getBalance()` | Returns the confirmed account balance in satoshis | `Promise<bigint>` |
 | `quoteSendTransaction(options)` | Estimates the fee for a transaction | `Promise<{fee: bigint}>` |
 | `getTransactionReceipt(hash)` | Returns a transaction's receipt | `Promise<BtcTransaction \| null>` |
-| `getTransaction(hash)` | Returns a normalized, finality-based transaction receipt | `Promise<BtcTransactionInfo>` |
-| `waitForTransaction(hash, options?)` | Polls until the transaction reaches the target finality (or times out) | `Promise<BtcTransactionInfo>` |
 | `getMaxSpendable()` | Returns the maximum spendable amount | `Promise<{amount: bigint, fee: bigint, changeValue: bigint}>` |
 
 ## 🌐 Supported Networks
