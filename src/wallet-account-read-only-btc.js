@@ -45,14 +45,14 @@ const bitcoinMessage = MessageFactory(ecc)
 /** @typedef {import('@tetherto/wdk-wallet').TransferOptions} TransferOptions */
 /** @typedef {import('@tetherto/wdk-wallet').TransferResult} TransferResult */
 /** @typedef {import('@tetherto/wdk-wallet').TransactionReceipt} TransactionReceipt */
+/** @typedef {import('@tetherto/wdk-wallet').WaitForTransactionOptions} WaitForTransactionOptions */
 
 /**
- * A normalized bitcoin transaction receipt, extended with the confirmation depth and the native bitcoinjs transaction.
+ * The bitcoin-specific fields added to a normalized transaction receipt.
  *
- * @typedef {TransactionReceipt & {
- *   confirmations: number | null,
- *   transaction: BtcTransactionReceipt
- * }} BtcTransactionInfo
+ * @typedef {Object} BtcTransactionDetails
+ * @property {number | null} confirmations - The confirmation depth (0 while pending, null when the chain tip can't be resolved).
+ * @property {BtcTransactionReceipt} transaction - The native bitcoinjs transaction.
  */
 
 /**
@@ -282,30 +282,32 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
    * Returns a normalized, finality-based receipt for a transaction.
    *
    * @param {string} hash - The transaction's hash.
-   * @returns {Promise<BtcTransactionInfo>} The normalized receipt.
+   * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The normalized receipt.
    * @throws {ValueError} If the hash is not a valid transaction hash.
    * @throws {NoSuchElementError} If no transaction has been found for the given hash.
    */
   async getTransaction (hash) {
-    if (!/^[0-9a-fA-F]{64}$/.test(hash)) {
-      throw new ValueError("The 'getTransaction(hash)' method requires a valid transaction hash.")
+    const txid = String(hash).trim()
+
+    if (!/^[0-9a-fA-F]{64}$/.test(txid)) {
+      throw new ValueError(`Invalid transaction hash: '${hash}'.`)
     }
 
     await this._ensureConnected()
 
     const address = await this.getAddress()
     const history = await this._client.getHistory(address)
-    const item = Array.isArray(history) ? history.find(h => h?.tx_hash === hash) : null
+    const item = Array.isArray(history) ? history.find(h => h?.tx_hash === txid) : null
 
     if (!item) {
-      throw new NoSuchElementError(`No transaction found for '${hash}'.`)
+      throw new NoSuchElementError(`No transaction found for '${txid}'.`)
     }
 
-    const transaction = Transaction.fromHex(await this._client.getTransaction(hash))
+    const transaction = Transaction.fromHex(await this._client.getTransaction(txid))
 
     if (!item.height || item.height <= 0) {
       return {
-        hash,
+        hash: txid,
         finality: 'pending',
         confirmations: 0,
         transaction
@@ -315,13 +317,25 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
     const confirmations = await this._getConfirmations(item.height)
 
     return {
-      hash,
+      hash: txid,
       finality: confirmations !== null && confirmations >= FINAL_CONFIRMATIONS ? 'final' : 'confirmed',
       success: true,
       block: item.height,
       confirmations,
       transaction
     }
+  }
+
+  /**
+   * Blocks until a transaction reaches a terminal state (the requested finality target or `dropped`), or times out.
+   *
+   * @param {string} hash - The transaction's hash.
+   * @param {WaitForTransactionOptions} [options] - The wait options.
+   * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The terminal receipt: the finality target reached (inspect `success` to tell success from revert), or `dropped`.
+   * @throws {TimeoutError} If the target is not reached before the timeout.
+   */
+  async waitForTransaction (hash, options = {}) {
+    return await super.waitForTransaction(hash, options)
   }
 
   /**
@@ -345,11 +359,23 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
     return tip - height + 1
   }
 
-  /** @protected @type {number} */
-  static _DEFAULT_WAIT_INTERVAL = 30000
+  /**
+   * The default poll cadence for {@link waitForTransaction}, in milliseconds. Set to 30 seconds to suit bitcoin's ~10-minute block time.
+   *
+   * @type {number}
+   */
+  get defaultWaitInterval () {
+    return 30000
+  }
 
-  /** @protected @type {number} */
-  static _DEFAULT_WAIT_TIMEOUT = 3600000
+  /**
+   * The default time budget for {@link waitForTransaction}, in milliseconds. Set to 1 hour to allow for bitcoin's slower inclusion and confirmation.
+   *
+   * @type {number}
+   */
+  get defaultWaitTimeout () {
+    return 3600000
+  }
 
   /**
    * Returns an estimation of the maximum spendable amount (in satoshis) that can be sent in

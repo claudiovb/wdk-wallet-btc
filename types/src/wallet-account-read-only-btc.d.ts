@@ -87,11 +87,20 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
      * Returns a normalized, finality-based receipt for a transaction.
      *
      * @param {string} hash - The transaction's hash.
-     * @returns {Promise<BtcTransactionInfo>} The normalized receipt.
+     * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The normalized receipt.
      * @throws {ValueError} If the hash is not a valid transaction hash.
      * @throws {NoSuchElementError} If no transaction has been found for the given hash.
      */
-    getTransaction(hash: string): Promise<BtcTransactionInfo>;
+    getTransaction(hash: string): Promise<TransactionReceipt & BtcTransactionDetails>;
+    /**
+     * Blocks until a transaction reaches a terminal state (the requested finality target or `dropped`), or times out.
+     *
+     * @param {string} hash - The transaction's hash.
+     * @param {WaitForTransactionOptions} [options] - The wait options.
+     * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The terminal receipt: the finality target reached (inspect `success` to tell success from revert), or `dropped`.
+     * @throws {TimeoutError} If the target is not reached before the timeout.
+     */
+    waitForTransaction(hash: string, options?: WaitForTransactionOptions): Promise<TransactionReceipt & BtcTransactionDetails>;
     /**
      * Returns the confirmation depth for a transaction included at the given block height, or null when the chain tip can't be resolved.
      *
@@ -100,10 +109,18 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
      * @returns {Promise<number | null>} The confirmation depth, or null.
      */
     protected _getConfirmations(height: number): Promise<number | null>;
-    /** @protected @type {number} */
-    protected static _DEFAULT_WAIT_INTERVAL: number;
-    /** @protected @type {number} */
-    protected static _DEFAULT_WAIT_TIMEOUT: number;
+    /**
+     * The default poll cadence for {@link waitForTransaction}, in milliseconds. Set to 30 seconds to suit bitcoin's ~10-minute block time.
+     *
+     * @type {number}
+     */
+    get defaultWaitInterval(): number;
+    /**
+     * The default time budget for {@link waitForTransaction}, in milliseconds. Set to 1 hour to allow for bitcoin's slower inclusion and confirmation.
+     *
+     * @type {number}
+     */
+    get defaultWaitTimeout(): number;
     /**
      * Returns the maximum spendable amount (in satoshis) that can be sent in
      * a single transaction, after subtracting estimated transaction fees.
@@ -185,11 +202,18 @@ export type TransactionResult = import("@tetherto/wdk-wallet").TransactionResult
 export type TransferOptions = import("@tetherto/wdk-wallet").TransferOptions;
 export type TransferResult = import("@tetherto/wdk-wallet").TransferResult;
 export type TransactionReceipt = import("@tetherto/wdk-wallet").TransactionReceipt;
+export type WaitForTransactionOptions = import("@tetherto/wdk-wallet").WaitForTransactionOptions;
 /**
- * A normalized bitcoin transaction receipt, extended with the confirmation depth and the native bitcoinjs transaction.
+ * The bitcoin-specific fields added to a normalized transaction receipt.
  */
-export type BtcTransactionInfo = TransactionReceipt & {
+export type BtcTransactionDetails = {
+    /**
+     * - The confirmation depth (0 while pending, null when the chain tip can't be resolved).
+     */
     confirmations: number | null;
+    /**
+     * - The native bitcoinjs transaction.
+     */
     transaction: BtcTransactionReceipt;
 };
 export type BtcTransaction = {

@@ -20,9 +20,13 @@
 /** @typedef {import('@tetherto/wdk-wallet').TransactionResult} TransactionResult */
 /** @typedef {import('@tetherto/wdk-wallet').TransferOptions} TransferOptions */
 /** @typedef {import('@tetherto/wdk-wallet').TransferResult} TransferResult */
+/** @typedef {import('@tetherto/wdk-wallet').Finality} Finality */
+/** @typedef {import('@tetherto/wdk-wallet').TransactionReceipt} TransactionReceipt */
+/** @typedef {import('@tetherto/wdk-wallet').WaitForTransactionTarget} WaitForTransactionTarget */
+/** @typedef {import('@tetherto/wdk-wallet').WaitForTransactionOptions} WaitForTransactionOptions */
 
 /** @typedef {import('./src/wallet-account-read-only-btc.js').BtcTransaction} BtcTransaction */
-/** @typedef {import('./src/wallet-account-read-only-btc.js').BtcTransactionInfo} BtcTransactionInfo */
+/** @typedef {import('./src/wallet-account-read-only-btc.js').BtcTransactionDetails} BtcTransactionDetails */
 /** @typedef {import('./src/wallet-account-read-only-btc.js').BtcWalletConfig} BtcWalletConfig */
 /** @typedef {import('./src/wallet-account-read-only-btc.js').BtcMaxSpendableResult} BtcMaxSpendableResult */
 /** @typedef {import('./src/wallet-account-btc.js').BtcTransfer} BtcTransfer */
