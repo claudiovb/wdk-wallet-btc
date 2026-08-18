@@ -287,9 +287,11 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
    * @throws {NoSuchElementError} If no transaction has been found for the given hash.
    */
   async getTransaction (hash) {
-    const txid = String(hash).trim()
+    // Normalize to lowercase: txids are case-insensitive but Electrum reports
+    // them lowercase, so an uppercase input would otherwise false-miss below.
+    const txid = String(hash).trim().toLowerCase()
 
-    if (!/^[0-9a-fA-F]{64}$/.test(txid)) {
+    if (!/^[0-9a-f]{64}$/.test(txid)) {
       throw new ValueError(`Invalid transaction hash: '${hash}'.`)
     }
 
@@ -297,7 +299,7 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
 
     const address = await this.getAddress()
     const history = await this._client.getHistory(address)
-    const item = Array.isArray(history) ? history.find(h => h?.tx_hash === txid) : null
+    const item = Array.isArray(history) ? history.find(h => h?.tx_hash?.toLowerCase() === txid) : null
 
     if (!item) {
       throw new NoSuchElementError(`No transaction found for '${txid}'.`)
@@ -327,11 +329,16 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
   }
 
   /**
-   * Blocks until a transaction reaches a terminal state (the requested finality target or `dropped`), or times out.
+   * Blocks until a transaction reaches the requested finality target, or times out.
+   *
+   * Note: there is no `dropped` path on BTC. A mempool eviction (the transaction
+   * disappearing from the address history) is indistinguishable from a not-yet-seen
+   * transaction, so it is treated as still-pending. A dropped transaction therefore
+   * surfaces as a {@link TimeoutError} rather than resolving to a `dropped` receipt.
    *
    * @param {string} hash - The transaction's hash.
    * @param {WaitForTransactionOptions} [options] - The wait options.
-   * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The terminal receipt: the finality target reached (inspect `success` to tell success from revert), or `dropped`.
+   * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The terminal receipt for the finality target reached (inspect `success` to tell success from revert).
    * @throws {TimeoutError} If the target is not reached before the timeout.
    */
   async waitForTransaction (hash, options = {}) {

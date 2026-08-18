@@ -93,11 +93,16 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
      */
     getTransaction(hash: string): Promise<TransactionReceipt & BtcTransactionDetails>;
     /**
-     * Blocks until a transaction reaches a terminal state (the requested finality target or `dropped`), or times out.
+     * Blocks until a transaction reaches the requested finality target, or times out.
+     *
+     * Note: there is no `dropped` path on BTC. A mempool eviction (the transaction
+     * disappearing from the address history) is indistinguishable from a not-yet-seen
+     * transaction, so it is treated as still-pending. A dropped transaction therefore
+     * surfaces as a {@link TimeoutError} rather than resolving to a `dropped` receipt.
      *
      * @param {string} hash - The transaction's hash.
      * @param {WaitForTransactionOptions} [options] - The wait options.
-     * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The terminal receipt: the finality target reached (inspect `success` to tell success from revert), or `dropped`.
+     * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The terminal receipt for the finality target reached (inspect `success` to tell success from revert).
      * @throws {TimeoutError} If the target is not reached before the timeout.
      */
     waitForTransaction(hash: string, options?: WaitForTransactionOptions): Promise<TransactionReceipt & BtcTransactionDetails>;
