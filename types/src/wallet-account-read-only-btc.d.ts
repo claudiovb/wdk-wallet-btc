@@ -78,10 +78,54 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
     /**
      * Returns a transaction's receipt.
      *
+     * @deprecated Use {@link getTransaction} instead, which returns a normalized, finality-based receipt. The raw bitcoinjs transaction remains available on its `transaction` property.
      * @param {string} hash - The transaction's hash.
      * @returns {Promise<BtcTransactionReceipt | null>} – The receipt, or null if the transaction has not been included in a block yet.
      */
     getTransactionReceipt(hash: string): Promise<BtcTransactionReceipt | null>;
+    /**
+     * Returns a normalized, finality-based receipt for a transaction.
+     *
+     * @param {string} hash - The transaction's hash.
+     * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The normalized receipt.
+     * @throws {ValueError} If the hash is not a valid transaction hash.
+     * @throws {NoSuchElementError} If no transaction has been found for the given hash.
+     */
+    getTransaction(hash: string): Promise<TransactionReceipt & BtcTransactionDetails>;
+    /**
+     * Blocks until a transaction reaches the requested finality target, or times out.
+     *
+     * Note: there is no `dropped` path on BTC. A mempool eviction (the transaction
+     * disappearing from the address history) is indistinguishable from a not-yet-seen
+     * transaction, so it is treated as still-pending. A dropped transaction therefore
+     * surfaces as a {@link TimeoutError} rather than resolving to a `dropped` receipt.
+     *
+     * @param {string} hash - The transaction's hash.
+     * @param {WaitForTransactionOptions} [options] - The wait options.
+     * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The terminal receipt for the finality target reached (inspect `success` to tell success from revert).
+     * @throws {TimeoutError} If the target is not reached before the timeout.
+     */
+    waitForTransaction(hash: string, options?: WaitForTransactionOptions): Promise<TransactionReceipt & BtcTransactionDetails>;
+    /**
+     * Returns the confirmation depth for a transaction included at the given block height, or null when the chain tip can't be resolved.
+     *
+     * @protected
+     * @param {number} height - The block height the transaction was included in.
+     * @returns {Promise<number | null>} The confirmation depth, or null.
+     */
+    protected _getConfirmations(height: number): Promise<number | null>;
+    /**
+     * The default poll cadence for {@link waitForTransaction}, in milliseconds. Set to 30 seconds to suit bitcoin's ~10-minute block time.
+     *
+     * @type {number}
+     */
+    get defaultWaitInterval(): number;
+    /**
+     * The default time budget for {@link waitForTransaction}, in milliseconds. Set to 1 hour to allow for bitcoin's slower inclusion and confirmation.
+     *
+     * @type {number}
+     */
+    get defaultWaitTimeout(): number;
     /**
      * Returns an estimation of the maximum spendable amount (in satoshis) that can be sent in
      * a single transaction, after subtracting estimated transaction fees.
@@ -168,6 +212,21 @@ export type BtcTransactionReceipt = import("bitcoinjs-lib").Transaction;
 export type TransactionResult = import("@tetherto/wdk-wallet").TransactionResult;
 export type TransferOptions = import("@tetherto/wdk-wallet").TransferOptions;
 export type TransferResult = import("@tetherto/wdk-wallet").TransferResult;
+export type TransactionReceipt = import("@tetherto/wdk-wallet").TransactionReceipt;
+export type WaitForTransactionOptions = import("@tetherto/wdk-wallet").WaitForTransactionOptions;
+/**
+ * The bitcoin-specific fields added to a normalized transaction receipt.
+ */
+export type BtcTransactionDetails = {
+    /**
+     * - The confirmation depth (0 while pending, null when the chain tip can't be resolved).
+     */
+    confirmations: number | null;
+    /**
+     * - The native bitcoinjs transaction.
+     */
+    transaction: BtcTransactionReceipt;
+};
 export type BtcTransaction = {
     /**
      * - The transaction's recipient.

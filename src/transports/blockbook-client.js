@@ -218,6 +218,16 @@ export default class BlockbookClient {
   }
 
   /**
+   * Returns the height of the current best block.
+   *
+   * @returns {Promise<number>} The current block height.
+   */
+  async getBlockHeight () {
+    const data = await this._get('/v2')
+    return Number(data.blockbook?.bestHeight ?? data.backend?.blocks)
+  }
+
+  /**
    * Returns a raw transaction.
    *
    * @param {string} txHash - The transaction hash.

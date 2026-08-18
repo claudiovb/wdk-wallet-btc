@@ -5,6 +5,7 @@ import { HOST, PORT, ELECTRUM_PORT, ZMQ_PORT, DATA_DIR } from './config.js'
 import { BitcoinCli, Waiter } from './helpers/index.js'
 
 import { WalletAccountReadOnlyBtc } from '../index.js'
+import { NoSuchElementError, ValueError } from '@tetherto/wdk-wallet'
 
 const ADDRESSES = {
   // 0'/0/404
@@ -190,6 +191,65 @@ describe.each([44, 84])('WalletAccountReadOnlyBtc', (bip) => {
     test('should throw an unsupported operation error', async () => {
       await expect(account.quoteTransfer({}))
         .rejects.toThrow("The 'quoteTransfer' method is not supported on the bitcoin blockchain.")
+    })
+  })
+
+  describe('getTransaction', () => {
+    let txid
+
+    beforeAll(() => {
+      txid = bitcoin.sendToAddress(ADDRESSES[bip], 0.005)
+    })
+
+    test('should report pending for an unconfirmed transaction', async () => {
+      let info = null
+      const start = Date.now()
+
+      while (Date.now() - start < 15_000) {
+        try {
+          info = await account.getTransaction(txid)
+          break
+        } catch (err) {
+          if (!(err instanceof NoSuchElementError)) throw err
+        }
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+
+      expect(info).not.toBeNull()
+      expect(info.finality).toBe('pending')
+      expect(info.success).toBeUndefined()
+      expect(info.confirmations).toBe(0)
+      expect(info.transaction).toBeDefined()
+    })
+
+    test('should report confirmed after one confirmation', async () => {
+      await waiter.mine(1)
+
+      const info = await account.getTransaction(txid)
+
+      expect(info.finality).toBe('confirmed')
+      expect(info.success).toBe(true)
+      expect(info.confirmations).toBe(1)
+      expect(typeof info.block).toBe('number')
+      expect(info.transaction).toBeDefined()
+    })
+
+    test('should report final after six confirmations', async () => {
+      await waiter.mine(5)
+
+      const info = await account.getTransaction(txid)
+
+      expect(info.finality).toBe('final')
+      expect(info.confirmations).toBeGreaterThanOrEqual(6)
+    })
+
+    test('should throw NoSuchElementError for an unknown transaction', async () => {
+      await expect(account.getTransaction('f'.repeat(64))).rejects.toThrow(NoSuchElementError)
+    })
+
+    test('should throw ValueError on a malformed transaction hash', async () => {
+      await expect(account.getTransaction('not-a-hash'))
+        .rejects.toThrow(ValueError)
     })
   })
 

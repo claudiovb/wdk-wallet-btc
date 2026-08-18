@@ -105,6 +105,15 @@ export default class IBtcClient {
   }
 
   /**
+   * Returns the height of the current best block.
+   *
+   * @returns {Promise<number>} The current block height.
+   */
+  async getBlockHeight () {
+    throw new NotImplementedError('getBlockHeight()')
+  }
+
+  /**
    * Returns a raw transaction.
    *
    * @param {string} txHash - The transaction hash.
