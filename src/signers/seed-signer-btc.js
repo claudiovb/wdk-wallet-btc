@@ -16,7 +16,7 @@ import { hmac } from '@noble/hashes/hmac'
 import { sha512 } from '@noble/hashes/sha2'
 import { initEccLib, networks, Psbt } from 'bitcoinjs-lib'
 import { BIP32Factory } from 'bip32'
-import { ISigner, NotImplementedError, SignerError } from '@tetherto/wdk-wallet'
+import { ISigner, NotImplementedError, InvalidSignerError } from '@tetherto/wdk-wallet'
 
 import * as bip39 from 'bip39'
 import * as ecc from '@bitcoinerlab/secp256k1'
@@ -24,7 +24,6 @@ import * as ecc from '@bitcoinerlab/secp256k1'
 // eslint-disable-next-line camelcase
 import { sodium_memzero } from 'sodium-universal'
 
-/** @typedef {import('../wallet-account-read-only-btc.js').BtcWalletConfig} BtcWalletConfig */
 /** @typedef {import('@tetherto/wdk-wallet').KeyPair} KeyPair */
 /** @typedef {import('bip32').BIP32Interface} BIP32Interface */
 /** @typedef {import('bitcoinjs-lib').Network} Network */
@@ -87,6 +86,15 @@ function deriveMasterNode (seed, network = BITCOIN) {
 }
 
 /**
+ * @typedef {Object} BtcSignerConfig
+ * @property {"bitcoin" | "regtest" | "testnet"} [network] - The name of the network to use (default: "bitcoin").
+ * @property {44 | 84} [bip] - The BIP address type used for key and address derivation.
+ *   - 44: [BIP-44 (P2PKH / legacy)](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
+ *   - 84: [BIP-84 (P2WPKH / native SegWit)](https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki)
+ *   - Default: 84 (P2WPKH).
+ */
+
+/**
  * Interface for Bitcoin signers, extending the base {@link ISigner} from `@tetherto/wdk-wallet`
  * @extends {ISigner}
  * @interface
@@ -129,12 +137,21 @@ export class ISignerBtc extends ISigner {
   }
 
   /**
-   * The wallet configuration.
+   * The signer configuration.
    *
-   * @type {BtcWalletConfig}
+   * @type {BtcSignerConfig}
    */
   get config () {
     throw new NotImplementedError('config')
+  }
+
+  /**
+   * The BIP standard of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
+   *
+   * @type {number}
+   */
+  get bip () {
+    throw new NotImplementedError('bip')
   }
 
   /**
@@ -159,7 +176,7 @@ export class ISignerBtc extends ISigner {
    *
    * @param {string} relPath - The relative derivation path.
    * @returns {Promise<ISignerBtc>} The derived child signer.
-   * @throws {SignerError} If the signer does not support derivation.
+   * @throws {InvalidSignerError} If the signer does not support derivation.
    */
   async derive (relPath) {
     throw new NotImplementedError('derive(relPath)')
@@ -211,17 +228,17 @@ export default class SeedSignerBtc extends ISignerBtc {
    * Creates a new seed-based signer.
    *
    * @param {string | Buffer} seed - The seed phrase (mnemonic) or seed buffer.
-   * @param {BtcWalletConfig} [config] - The wallet configuration.
+   * @param {BtcSignerConfig} [config] - The signer configuration.
    * @param {SeedSignerBtcOpts} [opts] - Internal construction options for master-node reuse, child derivation or path definition.
    */
   constructor (seed, config = {}, opts = {}) {
     super()
     config = normalizeConfig(config)
     /**
-     * The wallet account configuration.
+     * The signer configuration.
      *
      * @protected
-     * @type {BtcWalletConfig}
+     * @type {BtcSignerConfig}
      */
     this._config = config
     /** @private */
@@ -269,7 +286,7 @@ export default class SeedSignerBtc extends ISignerBtc {
    * Creates a signer from an extended private key (xprv/tprv).
    *
    * @param {string} xprv - The extended private key in base58 format.
-   * @param {BtcWalletConfig} [config] - The wallet configuration.
+   * @param {BtcSignerConfig} [config] - The signer configuration.
    * @returns {SeedSignerBtc} The signer instance.
    */
   static fromXprv (xprv, config = {}) {
@@ -321,12 +338,21 @@ export default class SeedSignerBtc extends ISignerBtc {
   }
 
   /**
-   * The wallet configuration.
+   * The signer configuration.
    *
-   * @type {BtcWalletConfig}
+   * @type {BtcSignerConfig}
    */
   get config () {
     return this._config
+  }
+
+  /**
+   * The BIP standard of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
+   *
+   * @type {number}
+   */
+  get bip () {
+    return this._bip
   }
 
   /**
@@ -351,11 +377,11 @@ export default class SeedSignerBtc extends ISignerBtc {
    *
    * @param {string} relPath - The relative derivation path (e.g., "0'/0/0").
    * @returns {Promise<SeedSignerBtc>} The derived child signer.
-   * @throws {SignerError} If this signer has no master node (it is a derived child or has been disposed).
+   * @throws {InvalidSignerError} If this signer has no master node (it is a derived child or has been disposed).
    */
   async derive (relPath) {
     if (!this._masterNode) {
-      throw new SignerError('Cannot derive: this signer has no master node (it is a derived child or has been disposed).')
+      throw new InvalidSignerError('Cannot derive: this signer has no master node (it is a derived child or has been disposed).')
     }
     return new SeedSignerBtc(null, this._config, { masterNode: this._masterNode, path: relPath, isChild: true })
   }

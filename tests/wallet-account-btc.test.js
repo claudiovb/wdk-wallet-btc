@@ -57,6 +57,7 @@ export const FEES = {
 describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
   const SIGNER_CONFIG = { network: 'regtest', bip }
   const CLIENT_CONFIG = { client: { type: 'electrum', clientConfig: { host: HOST, port: ELECTRUM_PORT } } }
+  const CONFIG = { ...SIGNER_CONFIG, ...CLIENT_CONFIG }
 
   const bitcoin = new BitcoinCli({
     host: HOST,
@@ -97,10 +98,10 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
 
       expect(account.path).toBe(ACCOUNTS[bip].path)
 
-      expect(account.keyPair).toEqual({
-        privateKey: Buffer.from(ACCOUNTS[bip].keyPair.privateKey, 'hex'),
-        publicKey: Buffer.from(ACCOUNTS[bip].keyPair.publicKey, 'hex')
-      })
+      expect({
+        privateKey: Buffer.from(account.keyPair.privateKey).toString('hex'),
+        publicKey: Buffer.from(account.keyPair.publicKey).toString('hex')
+      }).toEqual(ACCOUNTS[bip].keyPair)
 
       account.dispose()
     })
@@ -113,9 +114,9 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
 
       expect(account.path).toBe(ACCOUNTS[bip].path)
 
-      expect(account.keyPair).toEqual({
-        privateKey: Buffer.from(ACCOUNTS[bip].keyPair.privateKey, 'hex'),
-        publicKey: Buffer.from(ACCOUNTS[bip].keyPair.publicKey, 'hex')
+      expect(ACCOUNTS[bip].keyPair).toEqual({
+        privateKey: Buffer.from(account.keyPair.privateKey).toString('hex'),
+        publicKey: Buffer.from(account.keyPair.publicKey).toString('hex')
       })
 
       account.dispose()
@@ -124,45 +125,44 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
 
   describe('constructor (seed overload)', () => {
     test('should successfully initialize an account for the given seed phrase and path', () => {
-      const account = new WalletAccountBtc(SEED_PHRASE, "0'/0/0", { ...SIGNER_CONFIG, ...CLIENT_CONFIG })
+      const account = new WalletAccountBtc(SEED_PHRASE, "0'/0/0", CONFIG)
 
       expect(account.index).toBe(ACCOUNTS[bip].index)
 
       expect(account.path).toBe(ACCOUNTS[bip].path)
 
-      expect(account.keyPair).toEqual({
-        privateKey: Buffer.from(ACCOUNTS[bip].keyPair.privateKey, 'hex'),
-        publicKey: Buffer.from(ACCOUNTS[bip].keyPair.publicKey, 'hex')
+      expect(ACCOUNTS[bip].keyPair).toEqual({
+        privateKey: Buffer.from(account.keyPair.privateKey).toString('hex'),
+        publicKey: Buffer.from(account.keyPair.publicKey).toString('hex')
       })
 
       account.dispose()
     })
 
     test('should successfully initialize an account for the given seed and path', () => {
-      const account = new WalletAccountBtc(SEED, "0'/0/0", { ...SIGNER_CONFIG, ...CLIENT_CONFIG })
+      const account = new WalletAccountBtc(SEED, "0'/0/0", CONFIG)
 
       expect(account.index).toBe(ACCOUNTS[bip].index)
 
       expect(account.path).toBe(ACCOUNTS[bip].path)
 
-      expect(account.keyPair).toEqual({
-        privateKey: Buffer.from(ACCOUNTS[bip].keyPair.privateKey, 'hex'),
-        publicKey: Buffer.from(ACCOUNTS[bip].keyPair.publicKey, 'hex')
-      })
+      expect({
+        privateKey: Buffer.from(account.keyPair.privateKey).toString('hex'),
+        publicKey: Buffer.from(account.keyPair.publicKey).toString('hex')
+      }).toEqual(ACCOUNTS[bip].keyPair)
 
       account.dispose()
     })
 
     test('should throw if the seed phrase is invalid', () => {
       // eslint-disable-next-line no-new
-      expect(() => { new WalletAccountBtc(INVALID_SEED_PHRASE, "0'/0/0", { ...SIGNER_CONFIG, ...CLIENT_CONFIG }) })
+      expect(() => { new WalletAccountBtc(INVALID_SEED_PHRASE, "0'/0/0", CONFIG) })
         .toThrow('The seed phrase is invalid.')
     })
 
     test('should throw if the path is invalid', () => {
-      // eslint-disable-next-line no-new
-      expect(() => { new WalletAccountBtc(SEED_PHRASE, "a'/b/c", { ...SIGNER_CONFIG, ...CLIENT_CONFIG }) })
-        .toThrow(/Expected BIP32Path/)
+      expect(() => new WalletAccountBtc(SEED_PHRASE, "a'/b/c", CONFIG))
+        .toThrow(/Invalid format/)
     })
 
     test('should throw for unsupported bip specifications', () => {
@@ -211,7 +211,7 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
         btcAddress.fromOutputScript(out.script, networks.regtest) === recipient
       )
 
-      expect(recipientOutput.value).toBe(TRANSACTION.value)
+      expect(recipientOutput.value).toBe(BigInt(TRANSACTION.value))
     })
 
     test('should throw if transaction fee exceeds the transaction max fee configuration', async () => {
@@ -254,6 +254,27 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
     })
   })
 
+  describe('quoteSendTransaction', () => {
+    test('should quote an already-signed transaction without broadcasting', async () => {
+      const account = new WalletAccountBtc(SEED_PHRASE, "0'/0/0", CONFIG)
+      const address = await account.getAddress()
+      bitcoin.sendToAddress(address, 0.01)
+      await waiter.mine()
+
+      const TRANSACTION = { to: recipient, value: 1_000, feeRate: 1 }
+
+      const { tx: builtTx } = await account._buildSignedTransaction(TRANSACTION)
+      const signedHex = builtTx.hex
+
+      const { fee: quotedFee } = await account.quoteSendTransaction(signedHex)
+
+      const feeSats = bitcoin.getRawTransactionFeeSats(signedHex)
+      expect(quotedFee).toBe(BigInt(feeSats))
+
+      account.dispose()
+    })
+  })
+
   describe('sendTransaction', () => {
     test('should successfully send a transaction', async () => {
       const TRANSACTION = { to: recipient, value: 1_000, feeRate: 1 }
@@ -271,6 +292,34 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
 
       const feeSats = bitcoin.getTransactionFeeSats(hash)
       expect(fee).toBe(BigInt(feeSats))
+    })
+
+    test('should broadcast an already-signed transaction', async () => {
+      const account = new WalletAccountBtc(SEED_PHRASE, "0'/0/0", CONFIG)
+      const address = await account.getAddress()
+      bitcoin.sendToAddress(address, 0.01)
+      await waiter.mine()
+
+      const TRANSACTION = { to: recipient, value: 1_000, feeRate: 1 }
+
+      const { tx: builtTx } = await account._buildSignedTransaction(TRANSACTION)
+      const signedHex = builtTx.hex
+
+      const { hash, fee } = await account.sendTransaction(signedHex)
+
+      await waiter.mine()
+
+      const transaction = bitcoin.getTransaction(hash)
+      expect(transaction.txid).toBe(hash)
+      expect(transaction.details[0].address).toBe(TRANSACTION.to)
+
+      const amount = Math.round(transaction.details[0].amount * 1e+8)
+      expect(amount).toBe(TRANSACTION.value)
+
+      const feeSats = bitcoin.getTransactionFeeSats(hash)
+      expect(fee).toBe(BigInt(feeSats))
+
+      account.dispose()
     })
 
     test('should successfully send a transaction (bigint)', async () => {
@@ -479,7 +528,7 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
     beforeAll(async () => {
       // Use the known private key for the first address for this bip
       const privHex = ACCOUNTS[bip].keyPair.privateKey
-      accountPk = WalletAccountBtc.fromPrivateKey(privHex, { ...SIGNER_CONFIG, ...CLIENT_CONFIG })
+      accountPk = WalletAccountBtc.fromPrivateKey(privHex, CONFIG)
       recipientPk = bitcoin.getNewAddress()
 
       // Fund the private-key-based address so we can spend
@@ -577,8 +626,8 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
         const out = receipt.outs[i]
         const feeSats = Math.round(vout.value * 1e+8)
 
-        expect(out.value).toBe(feeSats)
-        expect(out.script.toString('hex')).toBe(vout.scriptPubKey.hex)
+        expect(out.value).toBe(BigInt(feeSats))
+        expect(Buffer.from(out.script).toString('hex')).toBe(vout.scriptPubKey.hex)
       }
 
       account.dispose()

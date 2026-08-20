@@ -182,9 +182,9 @@ console.log("Custom account address:", customAddress);
 import WalletManagerBtc from "@tetherto/wdk-wallet-btc";
 
 // Assume wallet and account are already created
-// Get confirmed balance (returns confirmed balance only)
-const balance = await account.getBalance();
-console.log("Confirmed balance:", balance, "satoshis"); // 1 BTC = 100,000,000 satoshis
+// Get balance in satoshis
+const balance = await account.getBalance()
+console.log('Balance:', balance, 'satoshis') // 1 BTC = 100,000,000 satoshis
 
 // Get transfer history (incoming and outgoing transfers)
 const allTransfers = await account.getTransfers();
@@ -203,8 +203,9 @@ console.log("Incoming transfers:", incomingTransfers);
 ```
 
 **Important Notes:**
-
-- `getBalance()` returns confirmed balance only (no unconfirmed balance option)
+- When the client reports `unconfirmedOutgoing`, unconfirmed incoming funds aren't counted (since they aren't spendable yet) but unconfirmed outgoing funds are subtracted immediately. Clients that can't compute `unconfirmedOutgoing` fall back to netting the raw unconfirmed balance.
+  - **Blockbook** (`blockbook-http`) computes `unconfirmedOutgoing`: a pending spend of yours is subtracted as soon as it's broadcast, following the same trust rule as Bitcoin Core's own wallet - it only counts if every input it draws from is itself confirmed, or comes from another one of your pending transactions that's *also* trusted by that same rule.
+  - **Electrum** (`electrum`, `electrum-ws`) doesn't compute `unconfirmedOutgoing`, so it falls back to the server's raw net mempool delta, which is coarser and can include unconfirmed incoming amounts too. Any client that does implement `unconfirmedOutgoing` should follow Blockbook's same trust rule, so `getBalance()` behaves consistently across providers.
 - There's no direct UTXO access method - UTXOs are managed internally
 - Use `getTransfers()` instead of `getTransactionHistory()` for transaction data
 - Transfer objects include transaction ID, value, direction, fee, and block height information
@@ -487,19 +488,19 @@ new WalletAccountBtc(signer);
 
 #### Methods
 
-| Method                          | Description                                                    | Returns                                                       |
-| ------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------- |
-| `getAddress()`                  | Returns the account's Bitcoin address                          | `Promise<string>`                                             |
-| `getBalance()`                  | Returns the confirmed account balance in satoshis              | `Promise<bigint>`                                             |
-| `sendTransaction(options)`      | Sends a Bitcoin transaction                                    | `Promise<{hash: string, fee: bigint}>`                        |
-| `quoteSendTransaction(options)` | Estimates the fee for a transaction                            | `Promise<{fee: bigint}>`                                      |
-| `getTransfers(options?)`        | Returns the account's transfer history                         | `Promise<BtcTransfer[]>`                                      |
-| `getTransactionReceipt(hash)`   | Returns a transaction's receipt                                | `Promise<BtcTransaction \| null>`                             |
-| `getMaxSpendable()`             | Returns the maximum spendable amount                           | `Promise<{amount: bigint, fee: bigint, changeValue: bigint}>` |
-| `sign(message)`                 | Signs a message with the account's private key                 | `Promise<string>`                                             |
-| `verify(message, signature)`    | Verifies a message signature                                   | `Promise<boolean>`                                            |
-| `toReadOnlyAccount()`           | Creates a read-only version of this account                    | `Promise<WalletAccountReadOnlyBtc>`                           |
-| `dispose()`                     | Disposes the wallet account, clearing private keys from memory | `void`                                                        |
+| Method | Description | Returns |
+|--------|-------------|---------|
+| `getAddress()` | Returns the account's Bitcoin address | `Promise<string>` |
+| `getBalance()` | Returns the account's balance in satoshis (see [Checking Balances](#checking-balances)) | `Promise<bigint>` |
+| `sendTransaction(options)` | Sends a Bitcoin transaction | `Promise<{hash: string, fee: bigint}>` |
+| `quoteSendTransaction(options)` | Estimates the fee for a transaction | `Promise<{fee: bigint}>` |
+| `getTransfers(options?)` | Returns the account's transfer history | `Promise<BtcTransfer[]>` |
+| `getTransactionReceipt(hash)` | Returns a transaction's receipt | `Promise<BtcTransaction \| null>` |
+| `getMaxSpendable()` | Returns the maximum spendable amount | `Promise<{amount: bigint, fee: bigint, changeValue: bigint}>` |
+| `sign(message)` | Signs a message with the account's private key | `Promise<string>` |
+| `verify(message, signature)` | Verifies a message signature | `Promise<boolean>` |
+| `toReadOnlyAccount()` | Creates a read-only version of this account | `Promise<WalletAccountReadOnlyBtc>` |
+| `dispose()` | Disposes the wallet account, clearing private keys from memory | `void` |
 
 ##### `getAddress()`
 
@@ -515,8 +516,7 @@ console.log("Address:", address); // bc1q... (BIP-84) or 1... (BIP-44)
 ```
 
 ##### `getBalance()`
-
-Returns the account's confirmed balance in satoshis.
+Returns the account's balance in satoshis - confirmed funds, plus handling of the account's own pending transactions that varies by provider. See [Checking Balances](#checking-balances) for details.
 
 **Returns:** `Promise<bigint>` - Balance in satoshis
 
@@ -727,12 +727,12 @@ new WalletAccountReadOnlyBtc(address, config);
 
 #### Methods
 
-| Method                          | Description                                       | Returns                                                       |
-| ------------------------------- | ------------------------------------------------- | ------------------------------------------------------------- |
-| `getBalance()`                  | Returns the confirmed account balance in satoshis | `Promise<bigint>`                                             |
-| `quoteSendTransaction(options)` | Estimates the fee for a transaction               | `Promise<{fee: bigint}>`                                      |
-| `getTransactionReceipt(hash)`   | Returns a transaction's receipt                   | `Promise<BtcTransaction \| null>`                             |
-| `getMaxSpendable()`             | Returns the maximum spendable amount              | `Promise<{amount: bigint, fee: bigint, changeValue: bigint}>` |
+| Method | Description | Returns |
+|--------|-------------|---------|
+| `getBalance()` | Returns the account's balance in satoshis (see [Checking Balances](#checking-balances)) | `Promise<bigint>` |
+| `quoteSendTransaction(options)` | Estimates the fee for a transaction | `Promise<{fee: bigint}>` |
+| `getTransactionReceipt(hash)` | Returns a transaction's receipt | `Promise<BtcTransaction \| null>` |
+| `getMaxSpendable()` | Returns the maximum spendable amount | `Promise<{amount: bigint, fee: bigint, changeValue: bigint}>` |
 
 ### SeedSignerBtc
 

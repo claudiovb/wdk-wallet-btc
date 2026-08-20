@@ -25,13 +25,6 @@ export default class WalletManagerBtc extends WalletManager {
      */
     protected _client: IBtcClient;
     /**
-     * A list that maps each client to a flag that is true only if the client was externally provided.
-     *
-     * @protected
-     * @type {Array<boolean>}
-     */
-    get _isExternalClient(): Array<boolean>;
-    /**
      * Returns the wallet account at a specific index, or the account associated with a registered
      * signer name (defaults to [BIP-84](https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki);
      * set config.bip=44 for [BIP-44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)).
@@ -64,7 +57,7 @@ export default class WalletManagerBtc extends WalletManager {
      * @param {string} [options.signerName] - The signer name. Omit to use the default signer.
      * @returns {Promise<WalletAccountBtc>} The account.
      * @throws {Error} If a signer name is given but no signer exists with that name.
-     * @throws {SignerError} If the signer doesn't support account derivation.
+     * @throws {InvalidSignerError} If the signer doesn't support account derivation.
      */
     getAccountByPath(path: string, options?: {
         signerName?: string;
@@ -79,15 +72,12 @@ export default class WalletManagerBtc extends WalletManager {
      */
     private _relativePath;
     /**
-     * Returns the current fee rates.
+     * A list that maps each client to a flag that is true only if the client was externally provided.
      *
-     * @returns {Promise<FeeRates>} The fee rates (in satoshis).
+     * @protected
+     * @type {Array<boolean>}
      */
-    getFeeRates(): Promise<FeeRates>;
-    /**
-     * Disposes all the wallet accounts, erasing their private keys from the memory and closing all internal connections.
-     */
-    dispose(): void;
+    protected get _isExternalClient(): Array<boolean>;
 }
 export type FeeRates = import("@tetherto/wdk-wallet").FeeRates;
 export type ISigner = import("@tetherto/wdk-wallet").ISigner;

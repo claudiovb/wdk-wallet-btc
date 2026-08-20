@@ -14,18 +14,21 @@
 'use strict'
 
 import { payments, Transaction } from 'bitcoinjs-lib'
-import bitcoinMessageModule from 'bitcoinjs-message'
+import bitcoinMessageModule from '@bitcoinerlab/btcmessage'
+import * as ecc from '@bitcoinerlab/secp256k1'
+import { toBase64, compare } from 'uint8array-tools'
 
-const bitcoinMessage = bitcoinMessageModule.default ?? bitcoinMessageModule
+const { MessageFactory } = bitcoinMessageModule.default ?? bitcoinMessageModule
+const bitcoinMessage = MessageFactory(ecc)
 
 /** @typedef {import('bitcoinjs-lib').Network} Network */
 /** @typedef {import('bitcoinjs-lib').Psbt} Psbt */
-/** @typedef {import('../wallet-account-read-only-btc.js').BtcWalletConfig} BtcWalletConfig */
+/** @typedef {import('./seed-signer-btc.js').BtcSignerConfig} BtcSignerConfig */
 /** @typedef {import('ecpair').ECPairInterface | import('bip32').BIP32Interface} SignerLike */
 /**
   * @typedef {Object} InputOwnershipResult
   * @property {Object} input - The raw PSBT input data.
-  * @property {{ script: Buffer, value: number } | null} prevOut - The previous output, or null if unavailable.
+  * @property {{ script: Uint8Array, value: bigint } | null} prevOut - The previous output, or null if unavailable.
   * @property {boolean} isOurs - Whether the input belongs to the given script.
 */
 
@@ -33,9 +36,9 @@ const bitcoinMessage = bitcoinMessageModule.default ?? bitcoinMessageModule
  * Builds a payment output script based on BIP standard.
  *
  * @param {number} bip - The BIP standard (44 for P2PKH, 84 for P2WPKH).
- * @param {Buffer} pubkey - The public key.
+ * @param {Uint8Array} pubkey - The public key.
  * @param {Network} network - The network configuration.
- * @returns {Buffer} The output script.
+ * @returns {Uint8Array} The output script.
  */
 function buildPaymentScript (bip, pubkey, network) {
   const payment = bip === 84
@@ -49,7 +52,7 @@ function buildPaymentScript (bip, pubkey, network) {
  *
  * @param {Psbt} psbtInstance - The PSBT instance.
  * @param {number} i - The input index.
- * @param {Buffer} myScript - The script to match against.
+ * @param {Uint8Array} myScript - The script to match against.
  * @returns {InputOwnershipResult} The input data and ownership status.
  */
 function detectInputOwnership (psbtInstance, i, myScript) {
@@ -62,11 +65,10 @@ function detectInputOwnership (psbtInstance, i, myScript) {
     if (input.nonWitnessUtxo) {
       const prevTx = Transaction.fromBuffer(input.nonWitnessUtxo)
       prevOut = prevTx.outs[txIn.index]
-      isOurs = !!(prevOut && prevOut.script && myScript && prevOut.script.equals(myScript))
     } else if (input.witnessUtxo) {
       prevOut = input.witnessUtxo
-      isOurs = !!(prevOut && prevOut.script && myScript && prevOut.script.equals(myScript))
     }
+    isOurs = !!(prevOut && prevOut.script && myScript && compare(prevOut.script, myScript) === 0)
   } catch (err) {
     isOurs = false
   }
@@ -80,21 +82,17 @@ function detectInputOwnership (psbtInstance, i, myScript) {
  * @param {Psbt} psbtInstance - The PSBT instance.
  * @param {number} i - The input index.
  * @param {number} bip - The BIP standard.
- * @param {{ script: Buffer, value: number } | null} prevOut - The previous output.
+ * @param {{ script: Uint8Array, value: bigint } | null} prevOut - The previous output.
  * @param {Object} input - The input data.
  */
 function ensureWitnessUtxoIfNeeded (psbtInstance, i, bip, prevOut, input) {
-  try {
-    if (bip === 84 && prevOut && prevOut.script && typeof prevOut.value === 'number' && !input.witnessUtxo) {
-      psbtInstance.updateInput(i, {
-        witnessUtxo: {
-          script: prevOut.script,
-          value: prevOut.value
-        }
-      })
-    }
-  } catch (err) {
-    // ignore if cannot set
+  if (bip === 84 && prevOut && prevOut.script && typeof prevOut.value === 'bigint' && !input.witnessUtxo) {
+    psbtInstance.updateInput(i, {
+      witnessUtxo: {
+        script: prevOut.script,
+        value: prevOut.value
+      }
+    })
   }
 }
 
@@ -136,11 +134,10 @@ export function signPsbtWithKey (psbtInstance, account, bip, network) {
 }
 
 /**
- * Normalizes wallet configuration with defaults.
+ * Normalizes the signer configuration with defaults, keeping only the fields signers own.
  *
- * @param {BtcWalletConfig} [config] - The configuration object.
- * @param {number} [config.bip] - The BIP standard (44 or 84) (default: 84).
- * @returns {BtcWalletConfig} The normalized configuration.
+ * @param {BtcSignerConfig} [config] - The configuration object.
+ * @returns {BtcSignerConfig} The normalized configuration.
  * @throws {Error} If an unsupported BIP is specified.
  */
 export function normalizeConfig (config = {}) {
@@ -148,13 +145,13 @@ export function normalizeConfig (config = {}) {
   if (![44, 84].includes(bip)) {
     throw new Error('Invalid bip specification. Supported bips: 44, 84.')
   }
-  return { ...config, bip }
+  return { network: config.network, bip }
 }
 
 /**
  * Derives a Bitcoin address from a public key.
  *
- * @param {Buffer} publicKey - The public key.
+ * @param {Uint8Array} publicKey - The public key.
  * @param {Network} network - The network configuration.
  * @param {number} [bip] - The BIP standard (44 for P2PKH, 84 for P2WPKH) (default: 44).
  * @returns {string} The Bitcoin address.
@@ -170,11 +167,10 @@ export function getAddressFromPublicKey (publicKey, network, bip = 44) {
  * Signs a message.
  *
  * @param {string} message - The message to sign.
- * @param {Buffer} privateKey - The private key.
+ * @param {Uint8Array} privateKey - The private key.
  * @param {number} bip - The BIP standard (44 or 84).
  * @returns {string} The message's signature.
  */
 export function signMessage (message, privateKey, bip) {
-  return bitcoinMessage.sign(message, privateKey, true, bip === 84 ? { segwitType: 'p2wpkh' } : undefined)
-    .toString('base64')
+  return toBase64(bitcoinMessage.sign(message, privateKey, true, bip === 84 ? { segwitType: 'p2wpkh' } : undefined))
 }

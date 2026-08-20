@@ -34,9 +34,9 @@ function buildMixedPsbt (signer) {
   const myScript = btcAddress.toOutputScript(signer.address, network)
   const foreignScript = btcAddress.toOutputScript(PSBT_FOREIGN_ADDRESS, network)
   const psbt = new Psbt({ network })
-  psbt.addInput({ hash: '11'.repeat(32), index: 0, witnessUtxo: { script: myScript, value: 100000 } })
-  psbt.addInput({ hash: '22'.repeat(32), index: 1, witnessUtxo: { script: foreignScript, value: 50000 } })
-  psbt.addOutput({ address: PSBT_FOREIGN_ADDRESS, value: 90000 })
+  psbt.addInput({ hash: '11'.repeat(32), index: 0, witnessUtxo: { script: myScript, value: BigInt(100000) } })
+  psbt.addInput({ hash: '22'.repeat(32), index: 1, witnessUtxo: { script: foreignScript, value: BigInt(50000) } })
+  psbt.addOutput({ address: PSBT_FOREIGN_ADDRESS, value: BigInt(90000) })
   return psbt
 }
 
@@ -48,7 +48,7 @@ describe('SeedSignerBtc', () => {
 
   test('should throw if the path is invalid', () => {
     expect(() => new SeedSignerBtc(VALID_SEED_PHRASE, {}, { path: "a'/b/c" }))
-      .toThrow(/Expected BIP32Path/)
+      .toThrow(/Invalid format/)
   })
 
   test('should throw for unsupported bip specifications', () => {
@@ -112,9 +112,9 @@ describe('SeedSignerBtc', () => {
 
     const parsed = Psbt.fromBase64(signed)
     expect(parsed.data.inputs[0].partialSig).toHaveLength(1)
-    expect(parsed.data.inputs[0].partialSig[0].pubkey.toString('hex'))
+    expect(Buffer.from(parsed.data.inputs[0].partialSig[0].pubkey).toString('hex'))
       .toBe('02e928d54a04833586b14e9c910884f589aebdc713a055e655c2fa13306c1b4f7f')
-    expect(parsed.data.inputs[0].partialSig[0].signature.toString('hex'))
+    expect(Buffer.from(parsed.data.inputs[0].partialSig[0].signature).toString('hex'))
       .toBe('3045022100bb13449bdd3b7c10817339e6dd22c276a205c744b5315fc8df94d2ddf1897681022011f945492c4b9607426124f0f0129dd2fb50344990ad93b134e1a06f9307191c01')
     // The foreign input must be left unsigned (skipped by the ownership filter).
     expect(parsed.data.inputs[1].partialSig).toBeUndefined()
@@ -184,9 +184,9 @@ describe('PrivateKeySignerBtc', () => {
 
     const parsed = Psbt.fromBase64(signed)
     expect(parsed.data.inputs[0].partialSig).toHaveLength(1)
-    expect(parsed.data.inputs[0].partialSig[0].pubkey.toString('hex'))
+    expect(Buffer.from(parsed.data.inputs[0].partialSig[0].pubkey).toString('hex'))
       .toBe('02f8044c82d6b9dfcfc3e6f3424cb11cc747bb34766bcbef72d2f52f6c4e8e07aa')
-    expect(parsed.data.inputs[0].partialSig[0].signature.toString('hex'))
+    expect(Buffer.from(parsed.data.inputs[0].partialSig[0].signature).toString('hex'))
       .toBe('3045022100baf90a97ad07d0cd320ad9c4e7028eb52f9f02b4b87bbb399c4883b324e78ff202204ed486957a17a03bc5cf96a13acdf6b05cc7ac18bc1a61d5d29806cd0f8cb78401')
     expect(parsed.data.inputs[1].partialSig).toBeUndefined()
     signer.dispose()

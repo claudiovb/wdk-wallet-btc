@@ -29,11 +29,17 @@ export class ISignerBtc extends ISigner {
      */
     get keyPair(): KeyPair;
     /**
-     * The wallet configuration.
+     * The signer configuration.
      *
-     * @type {BtcWalletConfig}
+     * @type {BtcSignerConfig}
      */
-    get config(): BtcWalletConfig;
+    get config(): BtcSignerConfig;
+    /**
+     * The BIP standard of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
+     *
+     * @type {number}
+     */
+    get bip(): number;
     /**
      * The account's Bitcoin address, when available.
      *
@@ -50,7 +56,7 @@ export class ISignerBtc extends ISigner {
      *
      * @param {string} relPath - The relative derivation path.
      * @returns {Promise<ISignerBtc>} The derived child signer.
-     * @throws {SignerError} If the signer does not support derivation.
+     * @throws {InvalidSignerError} If the signer does not support derivation.
      */
     derive(relPath: string): Promise<ISignerBtc>;
     /**
@@ -88,23 +94,25 @@ export default class SeedSignerBtc extends ISignerBtc {
      * Creates a signer from an extended private key (xprv/tprv).
      *
      * @param {string} xprv - The extended private key in base58 format.
-     * @param {BtcWalletConfig} [config] - The wallet configuration.
+     * @param {BtcSignerConfig} [config] - The signer configuration.
      * @returns {SeedSignerBtc} The signer instance.
      */
-    static fromXprv(xprv: string, config?: BtcWalletConfig): SeedSignerBtc;
+    static fromXprv(xprv: string, config?: BtcSignerConfig): SeedSignerBtc;
     /**
      * Creates a new seed-based signer.
      *
      * @param {string | Buffer} seed - The seed phrase (mnemonic) or seed buffer.
-     * @param {BtcWalletConfig} [config] - The wallet configuration.
+     * @param {BtcSignerConfig} [config] - The signer configuration.
      * @param {SeedSignerBtcOpts} [opts] - Internal construction options for master-node reuse, child derivation or path definition.
      */
-    constructor(seed: string | Buffer, config?: BtcWalletConfig, opts?: SeedSignerBtcOpts);
+    constructor(seed: string | Buffer, config?: BtcSignerConfig, opts?: SeedSignerBtcOpts);
     /**
+     * The signer configuration.
+     *
      * @protected
-     * @type {BtcWalletConfig}
+     * @type {BtcSignerConfig}
      */
-    protected _config: BtcWalletConfig;
+    protected _config: BtcSignerConfig;
     /** @private */
     private _bip;
     /** @private */
@@ -140,11 +148,17 @@ export default class SeedSignerBtc extends ISignerBtc {
      */
     get keyPair(): KeyPair;
     /**
-     * The wallet configuration.
+     * The signer configuration.
      *
-     * @type {BtcWalletConfig}
+     * @type {BtcSignerConfig}
      */
-    get config(): BtcWalletConfig;
+    get config(): BtcSignerConfig;
+    /**
+     * The BIP standard of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
+     *
+     * @type {number}
+     */
+    get bip(): number;
     /**
      * The account's Bitcoin address.
      *
@@ -161,7 +175,7 @@ export default class SeedSignerBtc extends ISignerBtc {
      *
      * @param {string} relPath - The relative derivation path (e.g., "0'/0/0").
      * @returns {Promise<SeedSignerBtc>} The derived child signer.
-     * @throws {SignerError} If this signer has no master node (it is a derived child or has been disposed).
+     * @throws {InvalidSignerError} If this signer has no master node (it is a derived child or has been disposed).
      */
     derive(relPath: string): Promise<SeedSignerBtc>;
     /**
@@ -189,7 +203,19 @@ export default class SeedSignerBtc extends ISignerBtc {
      */
     dispose(): void;
 }
-export type BtcWalletConfig = import("../wallet-account-read-only-btc.js").BtcWalletConfig;
+export type BtcSignerConfig = {
+    /**
+     * - The name of the network to use (default: "bitcoin").
+     */
+    network?: "bitcoin" | "regtest" | "testnet";
+    /**
+     * - The BIP address type used for key and address derivation.
+     * - 44: [BIP-44 (P2PKH / legacy)](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
+     * - 84: [BIP-84 (P2WPKH / native SegWit)](https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki)
+     * - Default: 84 (P2WPKH).
+     */
+    bip?: 44 | 84;
+};
 export type KeyPair = import("@tetherto/wdk-wallet").KeyPair;
 export type BIP32Interface = import("bip32").BIP32Interface;
 export type Network = import("bitcoinjs-lib").Network;

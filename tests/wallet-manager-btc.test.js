@@ -35,7 +35,7 @@ describe('WalletManagerBtc', () => {
     })
 
     test('should throw if the index is a negative number', async () => {
-      await expect(wallet.getAccount(-1)).rejects.toThrow(/Expected BIP32Path/)
+      await expect(wallet.getAccount(-1)).rejects.toThrow(/Invalid format/)
     })
   })
 
@@ -50,7 +50,7 @@ describe('WalletManagerBtc', () => {
 
     test('should throw if the path is invalid', async () => {
       await expect(wallet.getAccountByPath("a'/b/c"))
-        .rejects.toThrow(/Expected BIP32Path/)
+        .rejects.toThrow(/Invalid format/)
     })
   })
 
@@ -122,7 +122,7 @@ describe('WalletManagerBtc', () => {
 
     test('getAccountByPath throws for unknown signerName', async () => {
       await expect(wallet.getAccountByPath("0'/0/0", { signerName: 'ghost' }))
-        .rejects.toThrow(/No signer registered with name "ghost"/)
+        .rejects.toThrow(/No signer found with name/)
     })
   })
 

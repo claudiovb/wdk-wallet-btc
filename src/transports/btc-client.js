@@ -15,6 +15,7 @@
 
 import { NotImplementedError } from '@tetherto/wdk-wallet'
 import { address as btcAddress, crypto } from 'bitcoinjs-lib'
+import { toHex } from 'uint8array-tools'
 
 /**
  * @typedef {Object} BtcClientConfig
@@ -25,6 +26,9 @@ import { address as btcAddress, crypto } from 'bitcoinjs-lib'
  * @typedef {Object} BtcBalance
  * @property {number} confirmed - Confirmed balance in satoshis.
  * @property {number} [unconfirmed] - Unconfirmed balance in satoshis.
+ * @property {number} [unconfirmedOutgoing] - Amount leaving the address through unconfirmed transactions, in satoshis.
+ *   Clients that implement this should follow the same trust rule as {@link BlockbookClient}'s `getUnconfirmedOutgoing`,
+ *   so `getBalance()` behaves consistently regardless of which client backs it.
  */
 
 /**
@@ -101,6 +105,15 @@ export default class IBtcClient {
   }
 
   /**
+   * Returns the height of the current best block.
+   *
+   * @returns {Promise<number>} The current block height.
+   */
+  async getBlockHeight () {
+    throw new NotImplementedError('getBlockHeight()')
+  }
+
+  /**
    * Returns a raw transaction.
    *
    * @param {string} txHash - The transaction hash.
@@ -144,5 +157,5 @@ export default class IBtcClient {
 export function toScriptHash (address, network) {
   const script = btcAddress.toOutputScript(address, network)
   const hash = crypto.sha256(script)
-  return Buffer.from(hash).reverse().toString('hex')
+  return toHex(Uint8Array.from(hash).reverse())
 }

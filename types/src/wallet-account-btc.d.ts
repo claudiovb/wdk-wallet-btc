@@ -1,5 +1,5 @@
-/** @implements {IWalletAccount} */
-export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implements IWalletAccount {
+/** @implements {IWalletAccount<string>} */
+export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implements IWalletAccount<string> {
     /**
      * Creates a new bitcoin wallet account from a raw private key.
      *
@@ -21,9 +21,9 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      * Creates a new bitcoin wallet account using a signer.
      *
      * @param {ISignerBtc} signer - The signer.
-     * @param {BtcWalletConfig} [config] - The configuration object.
+     * @param {BtcAccountConfig} [config] - The configuration object. The network and BIP are taken from the signer.
      */
-    constructor(signer: ISignerBtc, config?: BtcWalletConfig);
+    constructor(signer: ISignerBtc, config?: BtcAccountConfig);
     /** @private */
     private _signer;
     /**
@@ -47,7 +47,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
     get path(): string;
     /**
      * The account's key pair.
-     * 
+     *
      * The uint8 arrays are bound to the wallet account, so any external change will reflect to the internal representation. For this reason,
      * it's strongly recommended to treat the key pair as a read-only view of the keys. While it's still technically possible to alter their
      * content, client code should never do so.
@@ -71,14 +71,21 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      */
     signTransaction({ to, value, feeRate, confirmationTarget }: BtcTransaction): Promise<string>;
     /**
+     * Quotes the costs of a send transaction operation.
+     *
+     * @param {BtcTransaction | string} tx - The transaction, or a signed raw transaction as a hex string.
+     * @returns {Promise<Omit<TransactionResult, 'hash'>>} The transaction's quotes.
+     */
+    quoteSendTransaction(tx: BtcTransaction | string): Promise<Omit<TransactionResult, "hash">>;
+    /**
      * Sends a transaction.
      *
-     * @param {BtcTransaction} tx - The transaction.
+     * @param {BtcTransaction | string} tx - The transaction, or a signed raw transaction as a hex string.
      * @param {number} [timeoutMs] - Maximum milliseconds to poll for spent inputs to disappear from unspent outputs after broadcast.
      * @returns {Promise<TransactionResult>} The transaction's result.
      * @throws {Error} If the transaction's cost exceeds the maximum transaction fee option.
      */
-    sendTransaction({ to, value, feeRate, confirmationTarget }: BtcTransaction, timeoutMs?: number): Promise<TransactionResult>;
+    sendTransaction(tx: BtcTransaction | string, timeoutMs?: number): Promise<TransactionResult>;
     /**
      * Transfers a token to another address.
      *
@@ -106,22 +113,22 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      * @returns {Promise<WalletAccountReadOnlyBtc>} The read-only account.
      */
     toReadOnlyAccount(): Promise<WalletAccountReadOnlyBtc>;
-    /**
-     * Disposes the wallet account, erasing the private key from memory and closing the connection with the server.
-     */
-    dispose(): void;
+    _btcReadOnlyAccount: WalletAccountReadOnlyBtc;
+    /** @private */
+    private _getSignedTransactionFee;
     /** @private */
     private _getRawTransaction;
     /** @private */
     private _buildSignedTransaction;
 }
-export type IWalletAccount = import("@tetherto/wdk-wallet").IWalletAccount;
+export type IWalletAccount<TSignedTransaction> = import("@tetherto/wdk-wallet").IWalletAccount<TSignedTransaction>;
 export type KeyPair = import("@tetherto/wdk-wallet").KeyPair;
 export type TransactionResult = import("@tetherto/wdk-wallet").TransactionResult;
 export type TransferOptions = import("@tetherto/wdk-wallet").TransferOptions;
 export type TransferResult = import("@tetherto/wdk-wallet").TransferResult;
 export type BtcTransaction = import("./wallet-account-read-only-btc.js").BtcTransaction;
 export type BtcWalletConfig = import("./wallet-account-read-only-btc.js").BtcWalletConfig;
+export type BtcAccountConfig = import("./wallet-account-read-only-btc.js").BtcAccountConfig;
 export type ISignerBtc = import("./signers/seed-signer-btc.js").ISignerBtc;
 export type BtcTransfer = {
     /**

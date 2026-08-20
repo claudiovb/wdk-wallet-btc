@@ -1,24 +1,3 @@
-/**
- * @typedef {Object} BtcClientConfig
- * @property {number} [timeout] - Connection timeout in milliseconds (default: 15_000).
- */
-/**
- * @typedef {Object} BtcBalance
- * @property {number} confirmed - Confirmed balance in satoshis.
- * @property {number} [unconfirmed] - Unconfirmed balance in satoshis.
- */
-/**
- * @typedef {Object} BtcUtxo
- * @property {string} tx_hash - The transaction hash containing this UTXO.
- * @property {number} tx_pos - The output index within the transaction.
- * @property {number} value - The UTXO value in satoshis.
- * @property {number} [height] - The block height (0 if unconfirmed).
- */
-/**
- * @typedef {Object} BtcHistoryItem
- * @property {string} tx_hash - The transaction hash.
- * @property {number} height - The block height (0 or negative if unconfirmed).
- */
 /** @interface */
 export default interface IBtcClient {
     /**
@@ -60,6 +39,12 @@ export default interface IBtcClient {
      * @returns {Promise<BtcHistoryItem[]>} List of transactions.
      */
     getHistory(address: string): Promise<BtcHistoryItem[]>;
+    /**
+     * Returns the height of the current best block.
+     *
+     * @returns {Promise<number>} The current block height.
+     */
+    getBlockHeight(): Promise<number>;
     /**
      * Returns a raw transaction.
      *
@@ -108,6 +93,12 @@ export type BtcBalance = {
      * - Unconfirmed balance in satoshis.
      */
     unconfirmed?: number;
+    /**
+     * - Amount leaving the address through unconfirmed transactions, in satoshis.
+     * Clients that implement this should follow the same trust rule as {@link BlockbookClient}'s `getUnconfirmedOutgoing`,
+     * so `getBalance()` behaves consistently regardless of which client backs it.
+     */
+    unconfirmedOutgoing?: number;
 };
 export type BtcUtxo = {
     /**

@@ -47,7 +47,7 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
      * @private
      * @type {bigint}
      */
-    private _dustLimit;
+    private _dustLimit: bigint;
     /**
      * Returns the account's bitcoin balance.
      *
@@ -78,26 +78,74 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
     /**
      * Returns a transaction's receipt.
      *
+     * @deprecated Use {@link getTransaction} instead, which returns a normalized, finality-based receipt. The raw bitcoinjs transaction remains available on its `transaction` property.
      * @param {string} hash - The transaction's hash.
      * @returns {Promise<BtcTransactionReceipt | null>} – The receipt, or null if the transaction has not been included in a block yet.
      */
     getTransactionReceipt(hash: string): Promise<BtcTransactionReceipt | null>;
     /**
-     * Returns the maximum spendable amount (in satoshis) that can be sent in
+     * Returns a normalized, finality-based receipt for a transaction.
+     *
+     * @param {string} hash - The transaction's hash.
+     * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The normalized receipt.
+     * @throws {ValueError} If the hash is not a valid transaction hash.
+     * @throws {NoSuchElementError} If no transaction has been found for the given hash.
+     */
+    getTransaction(hash: string): Promise<TransactionReceipt & BtcTransactionDetails>;
+    /**
+     * Blocks until a transaction reaches the requested finality target, or times out.
+     *
+     * Note: there is no `dropped` path on BTC. A mempool eviction (the transaction
+     * disappearing from the address history) is indistinguishable from a not-yet-seen
+     * transaction, so it is treated as still-pending. A dropped transaction therefore
+     * surfaces as a {@link TimeoutError} rather than resolving to a `dropped` receipt.
+     *
+     * @param {string} hash - The transaction's hash.
+     * @param {WaitForTransactionOptions} [options] - The wait options.
+     * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The terminal receipt for the finality target reached (inspect `success` to tell success from revert).
+     * @throws {TimeoutError} If the target is not reached before the timeout.
+     */
+    waitForTransaction(hash: string, options?: WaitForTransactionOptions): Promise<TransactionReceipt & BtcTransactionDetails>;
+    /**
+     * Returns the confirmation depth for a transaction included at the given block height, or null when the chain tip can't be resolved.
+     *
+     * @protected
+     * @param {number} height - The block height the transaction was included in.
+     * @returns {Promise<number | null>} The confirmation depth, or null.
+     */
+    protected _getConfirmations(height: number): Promise<number | null>;
+    /**
+     * The default poll cadence for {@link waitForTransaction}, in milliseconds. Set to 30 seconds to suit bitcoin's ~10-minute block time.
+     *
+     * @type {number}
+     */
+    get defaultWaitInterval(): number;
+    /**
+     * The default time budget for {@link waitForTransaction}, in milliseconds. Set to 1 hour to allow for bitcoin's slower inclusion and confirmation.
+     *
+     * @type {number}
+     */
+    get defaultWaitTimeout(): number;
+    /**
+     * Returns an estimation of the maximum spendable amount (in satoshis) that can be sent in
      * a single transaction, after subtracting estimated transaction fees.
      *
-     * The maximum spendable amount can differ from the wallet's total balance.
+     * The estimated maximum spendable amount can differ from the wallet's total balance.
      * A transaction can only include up to MAX_UTXO_INPUTS (default: 200) unspents.
      * Wallets holding more than this limit cannot spend their full balance in a
-     * single transaction.
+     * single transaction. There will likely be some satoshis left over as change.
      *
      * @param {Object} [opts] - Options.
      * @param {number | bigint} [opts.feeRate] - Fee rate in sat/vB. If omitted, estimated via the client.
-     * @returns {Promise<BtcMaxSpendableResult>} The maximum spendable result.
+     * @returns {Promise<BtcMaxSpendableResult>} The estimated maximum spendable result.
      */
     getMaxSpendable(opts?: {
         feeRate?: number | bigint;
     }): Promise<BtcMaxSpendableResult>;
+    /**
+     * Closes any internal connection with the server.
+     */
+    dispose(): void;
     /**
      * Ensures the client is connected.
      *
@@ -156,12 +204,29 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
 export type MempoolElectrumConfig = import("./transports/index.js").MempoolElectrumConfig;
 export type MempoolElectrumClient = import("./transports/index.js").MempoolElectrumClient;
 export type IBtcClient = import("./transports/index.js").IBtcClient;
+export type BlockbookClientConfig = import("./transports/blockbook-client.js").BlockbookClientConfig;
+export type ElectrumWsConfig = import("./transports/ws.js").ElectrumWsConfig;
 export type OutputWithValue = import("@bitcoinerlab/coinselect").OutputWithValue;
 export type Network = import("bitcoinjs-lib").Network;
 export type BtcTransactionReceipt = import("bitcoinjs-lib").Transaction;
 export type TransactionResult = import("@tetherto/wdk-wallet").TransactionResult;
 export type TransferOptions = import("@tetherto/wdk-wallet").TransferOptions;
 export type TransferResult = import("@tetherto/wdk-wallet").TransferResult;
+export type TransactionReceipt = import("@tetherto/wdk-wallet").TransactionReceipt;
+export type WaitForTransactionOptions = import("@tetherto/wdk-wallet").WaitForTransactionOptions;
+/**
+ * The bitcoin-specific fields added to a normalized transaction receipt.
+ */
+export type BtcTransactionDetails = {
+    /**
+     * - The confirmation depth (0 while pending, null when the chain tip can't be resolved).
+     */
+    confirmations: number | null;
+    /**
+     * - The native bitcoinjs transaction.
+     */
+    transaction: BtcTransactionReceipt;
+};
 export type BtcTransaction = {
     /**
      * - The transaction's recipient.
@@ -180,26 +245,43 @@ export type BtcTransaction = {
      */
     feeRate?: number | bigint;
 };
-export type BtcClientDescriptor =
-    | { type: 'blockbook-http', clientConfig: import("./transports/blockbook-client.js").BlockbookClientConfig }
-    | { type: 'electrum-ws', clientConfig: Omit<import("./transports/ws.js").ElectrumWsConfig, 'network'> }
-    | { type: 'electrum', clientConfig: Omit<MempoolElectrumConfig, 'network'> };
-export type BtcWalletConfig = {
+export type BtcClientDescriptor = BtcBlockbookHttpClientDescriptor | BtcElectrumClientDescriptor | BtcElectrumWsClientDescriptor;
+export type BtcBlockbookHttpClientDescriptor = {
     /**
-     * - The bitcoin client: a pre-built IBtcClient, a descriptor { type, config }, or an array for failover.
+     * - The client's type.
+     */
+    type: "blockbook-http";
+    /**
+     * - The client's configuration.
+     */
+    clientConfig: BlockbookClientConfig;
+};
+export type BtcElectrumWsClientDescriptor = {
+    /**
+     * - Use a WebSocket Electrum client.
+     */
+    type: "electrum-ws";
+    /**
+     * - The WebSocket client configuration.
+     */
+    clientConfig: Omit<ElectrumWsConfig, "network">;
+};
+export type BtcElectrumClientDescriptor = {
+    /**
+     * - Use a TCP/TLS/SSL Electrum client.
+     */
+    type: "electrum";
+    /**
+     * - The Electrum client configuration.
+     */
+    clientConfig: Omit<MempoolElectrumConfig, "network">;
+};
+export type BtcSignerConfig = import("./signers/seed-signer-btc.js").BtcSignerConfig;
+export type BtcAccountConfig = {
+    /**
+     * - The bitcoin client, or a list of bitcoin client options for connection fallback.
      */
     client?: IBtcClient | BtcClientDescriptor | Array<IBtcClient | BtcClientDescriptor>;
-    /**
-     * - The name of the network to use (default: "bitcoin").
-     */
-    network?: "bitcoin" | "regtest" | "testnet";
-    /**
-     * - The BIP address type used for key and address derivation.
-     *   - 44: [BIP-44 (P2PKH / legacy)](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
-     *   - 84: [BIP-84 (P2WPKH / native SegWit)](https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki)
-     *   - Default: 84 (P2WPKH).
-     */
-    bip?: 44 | 84;
     /**
      * - The number of retries in the failover mechanism.
      */
@@ -209,6 +291,10 @@ export type BtcWalletConfig = {
      */
     transactionMaxFee?: number | bigint;
 };
+/**
+ * The wallet configuration, joining the signer configuration (network, bip) with the account configuration (client, retries, transactionMaxFee).
+ */
+export type BtcWalletConfig = BtcSignerConfig & BtcAccountConfig;
 export type BtcMaxSpendableResult = {
     /**
      * - The maximum spendable amount in satoshis.

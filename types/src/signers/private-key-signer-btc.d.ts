@@ -1,4 +1,4 @@
-/** @typedef {import('../wallet-account-read-only-btc.js').BtcWalletConfig} BtcWalletConfig */
+/** @typedef {import('./seed-signer-btc.js').BtcSignerConfig} BtcSignerConfig */
 /** @typedef {import('@tetherto/wdk-wallet').KeyPair} KeyPair */
 /**
  * Signer backed by a single raw private key (non-HD).
@@ -13,14 +13,14 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
      * Creates a new private key signer.
      *
      * @param {string | Uint8Array | Buffer} privateKey - The raw private key (hex string or 32 bytes).
-     * @param {BtcWalletConfig} [config] - The wallet configuration.
+     * @param {BtcSignerConfig} [config] - The signer configuration.
      */
-    constructor(privateKey: string | Uint8Array | Buffer, config?: BtcWalletConfig);
+    constructor(privateKey: string | Uint8Array | Buffer, config?: BtcSignerConfig);
     /**
      * @private
-     * @type {BtcWalletConfig}
+     * @type {BtcSignerConfig}
      */
-    private _config: BtcWalletConfig;
+    private _config: BtcSignerConfig;
     /** @private */
     private _account;
     /** @private */
@@ -50,11 +50,17 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
      */
     get keyPair(): KeyPair;
     /**
-     * The wallet configuration.
+     * The signer configuration.
      *
-     * @type {BtcWalletConfig}
+     * @type {BtcSignerConfig}
      */
-    get config(): BtcWalletConfig;
+    get config(): BtcSignerConfig;
+    /**
+     * The BIP standard of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
+     *
+     * @type {number}
+     */
+    get bip(): number;
     /**
      * The account's Bitcoin address.
      *
@@ -70,13 +76,13 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
      * Not supported for private key signers.
      *
      * @returns {Promise<never>}
-     * @throws {SignerError} Always — private-key signers do not support derivation.
+     * @throws {InvalidSignerError} Always — private-key signers do not support derivation.
      */
     derive(): Promise<never>;
     /**
      * Not available for private key signers.
      *
-     * @throws {SignerError} Always throws since extended keys require HD derivation.
+     * @throws {InvalidSignerError} Always throws since extended keys require HD derivation.
      */
     getExtendedPublicKey(): Promise<never>;
     /**
@@ -98,7 +104,7 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
      */
     dispose(): void;
 }
-export type BtcWalletConfig = import("../wallet-account-read-only-btc.js").BtcWalletConfig;
+export type BtcSignerConfig = import("./seed-signer-btc.js").BtcSignerConfig;
 export type KeyPair = import("@tetherto/wdk-wallet").KeyPair;
 import { ISignerBtc } from './seed-signer-btc.js';
 import { Psbt } from 'bitcoinjs-lib';

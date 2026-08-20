@@ -5,6 +5,7 @@ import { HOST, PORT, ELECTRUM_PORT, ZMQ_PORT, DATA_DIR } from './config.js'
 import { BitcoinCli, Waiter } from './helpers/index.js'
 
 import { WalletAccountReadOnlyBtc } from '../index.js'
+import { NoSuchElementError, ValueError } from '@tetherto/wdk-wallet'
 
 const ADDRESSES = {
   // 0'/0/404
@@ -193,6 +194,65 @@ describe.each([44, 84])('WalletAccountReadOnlyBtc', (bip) => {
     })
   })
 
+  describe('getTransaction', () => {
+    let txid
+
+    beforeAll(() => {
+      txid = bitcoin.sendToAddress(ADDRESSES[bip], 0.005)
+    })
+
+    test('should report pending for an unconfirmed transaction', async () => {
+      let info = null
+      const start = Date.now()
+
+      while (Date.now() - start < 15_000) {
+        try {
+          info = await account.getTransaction(txid)
+          break
+        } catch (err) {
+          if (!(err instanceof NoSuchElementError)) throw err
+        }
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+
+      expect(info).not.toBeNull()
+      expect(info.finality).toBe('pending')
+      expect(info.success).toBeUndefined()
+      expect(info.confirmations).toBe(0)
+      expect(info.transaction).toBeDefined()
+    })
+
+    test('should report confirmed after one confirmation', async () => {
+      await waiter.mine(1)
+
+      const info = await account.getTransaction(txid)
+
+      expect(info.finality).toBe('confirmed')
+      expect(info.success).toBe(true)
+      expect(info.confirmations).toBe(1)
+      expect(typeof info.block).toBe('number')
+      expect(info.transaction).toBeDefined()
+    })
+
+    test('should report final after six confirmations', async () => {
+      await waiter.mine(5)
+
+      const info = await account.getTransaction(txid)
+
+      expect(info.finality).toBe('final')
+      expect(info.confirmations).toBeGreaterThanOrEqual(6)
+    })
+
+    test('should throw NoSuchElementError for an unknown transaction', async () => {
+      await expect(account.getTransaction('f'.repeat(64))).rejects.toThrow(NoSuchElementError)
+    })
+
+    test('should throw ValueError on a malformed transaction hash', async () => {
+      await expect(account.getTransaction('not-a-hash'))
+        .rejects.toThrow(ValueError)
+    })
+  })
+
   describe('verify', () => {
     test('should return true for a valid signature', async () => {
         const result = await account.verify(MESSAGE, SIGNATURES[bip])
@@ -208,5 +268,36 @@ describe.each([44, 84])('WalletAccountReadOnlyBtc', (bip) => {
       await expect(account.verify(MESSAGE, 'A bad signature'))
         .rejects.toThrow('Invalid signature')
     })
+  })
+})
+
+describe('WalletAccountReadOnlyBtc getBalance formula', () => {
+  function stubClient (balance) {
+    return {
+      connect: async () => {},
+      getBalance: async () => balance
+    }
+  }
+
+  test('should subtract unconfirmedOutgoing when the client reports it', async () => {
+    const account = new WalletAccountReadOnlyBtc(ADDRESSES[84], {
+      network: 'regtest',
+      client: stubClient({ confirmed: 100_000, unconfirmed: 999_999, unconfirmedOutgoing: 30_000 })
+    })
+
+    const balance = await account.getBalance()
+
+    expect(balance).toBe(70_000n)
+  })
+
+  test('should fall back to netting the raw unconfirmed balance when the client does not report unconfirmedOutgoing', async () => {
+    const account = new WalletAccountReadOnlyBtc(ADDRESSES[84], {
+      network: 'regtest',
+      client: stubClient({ confirmed: 100_000, unconfirmed: -30_000 })
+    })
+
+    const balance = await account.getBalance()
+
+    expect(balance).toBe(70_000n)
   })
 })

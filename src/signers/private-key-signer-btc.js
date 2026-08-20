@@ -15,9 +15,8 @@
 // limitations under the License.
 
 import { networks, Psbt } from 'bitcoinjs-lib'
-import * as ecc from '@bitcoinerlab/secp256k1'
-import { ECPairFactory } from 'ecpair'
-import { SignerError } from '@tetherto/wdk-wallet'
+import { ECPair } from '@bitcoinerlab/descriptors'
+import { InvalidSignerError } from '@tetherto/wdk-wallet'
 
 // eslint-disable-next-line camelcase
 import { sodium_memzero } from 'sodium-universal'
@@ -25,8 +24,7 @@ import { sodium_memzero } from 'sodium-universal'
 import { normalizeConfig, getAddressFromPublicKey, signMessage, signPsbtWithKey } from './utils.js'
 import { ISignerBtc } from './seed-signer-btc.js'
 
-const ECPair = ECPairFactory(ecc)
-/** @typedef {import('../wallet-account-read-only-btc.js').BtcWalletConfig} BtcWalletConfig */
+/** @typedef {import('./seed-signer-btc.js').BtcSignerConfig} BtcSignerConfig */
 /** @typedef {import('@tetherto/wdk-wallet').KeyPair} KeyPair */
 
 /**
@@ -41,7 +39,7 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
    * Creates a new private key signer.
    *
    * @param {string | Uint8Array | Buffer} privateKey - The raw private key (hex string or 32 bytes).
-   * @param {BtcWalletConfig} [config] - The wallet configuration.
+   * @param {BtcSignerConfig} [config] - The signer configuration.
    */
   constructor (privateKey, config = {}) {
     super()
@@ -65,7 +63,7 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
     const address = getAddressFromPublicKey(account.publicKey, network, config.bip)
     /**
      * @private
-     * @type {BtcWalletConfig}
+     * @type {BtcSignerConfig}
      */
     this._config = config
     /** @private */
@@ -114,12 +112,21 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
   }
 
   /**
-   * The wallet configuration.
+   * The signer configuration.
    *
-   * @type {BtcWalletConfig}
+   * @type {BtcSignerConfig}
    */
   get config () {
     return this._config
+  }
+
+  /**
+   * The BIP standard of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
+   *
+   * @type {number}
+   */
+  get bip () {
+    return this._config.bip
   }
 
   /**
@@ -143,19 +150,19 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
    * Not supported for private key signers.
    *
    * @returns {Promise<never>}
-   * @throws {SignerError} Always — private-key signers do not support derivation.
+   * @throws {InvalidSignerError} Always — private-key signers do not support derivation.
    */
   async derive () {
-    throw new SignerError('PrivateKeySignerBtc does not support derivation.')
+    throw new InvalidSignerError('PrivateKeySignerBtc does not support derivation.')
   }
 
   /**
    * Not available for private key signers.
    *
-   * @throws {SignerError} Always throws since extended keys require HD derivation.
+   * @throws {InvalidSignerError} Always throws since extended keys require HD derivation.
    */
   async getExtendedPublicKey () {
-    throw new SignerError('Extended public key is unavailable for private-key imported signers.')
+    throw new InvalidSignerError('Extended public key is unavailable for private-key imported signers.')
   }
 
   /**

@@ -19,6 +19,7 @@ import { LRUCache } from 'lru-cache'
 import PrivateKeySignerBtc from './signers/private-key-signer-btc.js'
 import SeedSignerBtc from './signers/seed-signer-btc.js'
 import WalletAccountReadOnlyBtc from './wallet-account-read-only-btc.js'
+import { compare, fromHex, toHex } from 'uint8array-tools'
 
 /** @typedef {import('@tetherto/wdk-wallet').IWalletAccount} IWalletAccount */
 
@@ -29,6 +30,7 @@ import WalletAccountReadOnlyBtc from './wallet-account-read-only-btc.js'
 
 /** @typedef {import('./wallet-account-read-only-btc.js').BtcTransaction} BtcTransaction */
 /** @typedef {import('./wallet-account-read-only-btc.js').BtcWalletConfig} BtcWalletConfig */
+/** @typedef {import('./wallet-account-read-only-btc.js').BtcAccountConfig} BtcAccountConfig */
 
 /** @typedef {import('./signers/seed-signer-btc.js').ISignerBtc} ISignerBtc */
 
@@ -49,7 +51,7 @@ const MAX_CACHE_ENTRIES = 1000
 const REQUEST_BATCH_SIZE = 64
 const POLLING_INTERVAL = 300
 
-/** @implements {IWalletAccount} */
+/** @implements {IWalletAccount<string>} */
 export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
   /**
    * Creates a new bitcoin wallet account from a BIP-39 seed, deriving the account's key at the
@@ -66,21 +68,21 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    *
    * @overload
    * @param {ISignerBtc} signer - The signer.
-   * @param {BtcWalletConfig} [config] - The configuration object.
+   * @param {BtcAccountConfig} [config] - The configuration object. The network and BIP are taken from the signer.
    */
 
   constructor (seedOrSigner, pathOrConfig = {}, config = {}) {
     let signer, configuration
     if (typeof seedOrSigner === 'string' || seedOrSigner instanceof Uint8Array) {
-      const { client, ...signerConfig } = config
-      signer = new SeedSignerBtc(seedOrSigner, signerConfig, { path: pathOrConfig, isChild: true })
-      configuration = config
+      const { network, bip, ...accountConfig } = config
+      signer = new SeedSignerBtc(seedOrSigner, { network, bip }, { path: pathOrConfig, isChild: true })
+      configuration = accountConfig
     } else {
       signer = seedOrSigner
       configuration = pathOrConfig
     }
 
-    super(signer.address, { network: signer.config.network, bip: signer.config.bip, ...configuration })
+    super(signer.address, { ...configuration, network: signer.config.network, bip: signer.bip })
 
     /** @private */
     this._signer = signer
@@ -139,9 +141,9 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    * @returns {WalletAccountBtc} The wallet account.
    */
   static fromPrivateKey (privateKey, config = {}) {
-    const { client, ...signerConfig } = config
-    const signer = new PrivateKeySignerBtc(privateKey, signerConfig)
-    return new WalletAccountBtc(signer, { client })
+    const { network, bip, ...accountConfig } = config
+    const signer = new PrivateKeySignerBtc(privateKey, { network, bip })
+    return new WalletAccountBtc(signer, accountConfig)
   }
 
   /**
@@ -172,25 +174,64 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
   }
 
   /**
+   * Quotes the costs of a send transaction operation.
+   *
+   * @param {BtcTransaction | string} tx - The transaction, or a signed raw transaction as a hex string.
+   * @returns {Promise<Omit<TransactionResult, 'hash'>>} The transaction's quotes.
+   */
+  async quoteSendTransaction (tx) {
+    if (typeof tx === 'string') {
+      await this._ensureConnected()
+
+      const transaction = Transaction.fromHex(tx)
+      const fee = await this._getSignedTransactionFee(transaction)
+
+      return { fee }
+    }
+
+    return await super.quoteSendTransaction(tx)
+  }
+
+  /**
    * Sends a transaction.
    *
-   * @param {BtcTransaction} tx - The transaction.
+   * @param {BtcTransaction | string} tx - The transaction, or a signed raw transaction as a hex string.
    * @param {number} [timeoutMs] - Maximum milliseconds to poll for spent inputs to disappear from unspent outputs after broadcast.
    * @returns {Promise<TransactionResult>} The transaction's result.
    * @throws {Error} If the transaction's cost exceeds the maximum transaction fee option.
    */
-  async sendTransaction ({ to, value, feeRate, confirmationTarget = 1 }, timeoutMs = 10000) {
-    const { tx, utxos } = await this._buildSignedTransaction({ to, value, feeRate, confirmationTarget })
+  async sendTransaction (tx, timeoutMs = 10000) {
+    await this._ensureConnected()
 
-    if (this._config.transactionMaxFee !== undefined && tx.fee > this._config.transactionMaxFee) {
+    let hex, txid, fee, spentOutpoints
+
+    if (typeof tx === 'string') {
+      const transaction = Transaction.fromHex(tx)
+
+      hex = tx
+      txid = transaction.getId()
+      fee = await this._getSignedTransactionFee(transaction)
+      spentOutpoints = new Set(
+        transaction.ins.map((input) => `${Buffer.from(input.hash).reverse().toString('hex')}:${input.index}`)
+      )
+    } else {
+      const { to, value, feeRate, confirmationTarget = 1 } = tx
+      const { tx: builtTx, utxos } = await this._buildSignedTransaction({ to, value, feeRate, confirmationTarget })
+
+      hex = builtTx.hex
+      txid = builtTx.txid
+      fee = builtTx.fee
+      spentOutpoints = new Set(utxos.map(({ tx_hash: txHash, tx_pos: txPos }) => `${txHash}:${txPos}`))
+    }
+
+    if (this._config.transactionMaxFee !== undefined && fee > this._config.transactionMaxFee) {
       throw new Error('Exceeded maximum fee cost for transaction operation.')
     }
 
     const address = await this.getAddress()
     let retries = Math.ceil(timeoutMs / POLLING_INTERVAL)
-    const spentOutpoints = new Set(utxos.map(({ tx_hash: txHash, tx_pos: txPos }) => `${txHash}:${txPos}`))
 
-    await this._client.broadcast(tx.hex)
+    await this._client.broadcast(hex)
 
     while (retries > 0) {
       retries -= 1
@@ -204,7 +245,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
       if (!hasSpentOutpoints) break
     }
 
-    return { hash: tx.txid, fee: tx.fee }
+    return { hash: txid, fee }
   }
 
   /**
@@ -257,7 +298,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
     }
 
     const getPrevUtxo = async (input) => {
-      const prevTxId = Buffer.from(input.hash).reverse().toString('hex')
+      const prevTxId = toHex(Uint8Array.from(input.hash).reverse())
       const prevKey = `${prevTxId}:${input.index}`
       const cached = prevUtxoCache.get(prevKey)
       if (cached !== undefined) return cached
@@ -290,7 +331,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
       for (const prevUtxo of prevUtxos) {
         if (!prevUtxo || typeof prevUtxo.value !== 'bigint') continue
         totalInputValue += prevUtxo.value
-        const isOurPrevUtxo = prevUtxo.script && prevUtxo.script.equals(myScript)
+        const isOurPrevUtxo = prevUtxo.script && compare(prevUtxo.script, myScript) === 0
         isOutgoingTx = isOutgoingTx || isOurPrevUtxo
       }
 
@@ -304,7 +345,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
       for (let vout = 0; vout < utxos.length; vout++) {
         const utxo = utxos[vout]
         const utxoValue = BigInt(utxo.value)
-        const isSelfUtxo = utxo.script.equals(myScript)
+        const isSelfUtxo = compare(utxo.script, myScript) === 0
         let directionType = null
         if (isSelfUtxo && !isOutgoingTx) directionType = 'incoming'
         else if (!isSelfUtxo && isOutgoingTx) directionType = 'outgoing'
@@ -367,7 +408,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    */
   async toReadOnlyAccount () {
     if (!this._btcReadOnlyAccount) {
-      this._btcReadOnlyAccount = new WalletAccountReadOnlyBtc(this._address, {
+      this._btcReadOnlyAccount = new WalletAccountReadOnlyBtc(await this.getAddress(), {
         ...this._config,
         client: this._client
       })
@@ -382,6 +423,34 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
   dispose () {
     this._signer.dispose()
     super.dispose()
+  }
+
+  /**
+   * Computes the fee of a signed raw transaction by resolving the value of each
+   * spent input from the blockchain and subtracting the total output value.
+   *
+   * @private
+   * @param {Transaction} transaction - The decoded signed transaction.
+   * @returns {Promise<bigint>} The fee (in satoshis).
+   */
+  async _getSignedTransactionFee (transaction) {
+    let totalInput = 0n
+
+    for (const input of transaction.ins) {
+      const prevTxId = Buffer.from(input.hash).reverse().toString('hex')
+      const prevHex = await this._client.getTransaction(prevTxId)
+      const prevTx = Transaction.fromHex(prevHex)
+
+      totalInput += BigInt(prevTx.outs[input.index].value)
+    }
+
+    let totalOutput = 0n
+
+    for (const output of transaction.outs) {
+      totalOutput += BigInt(output.value)
+    }
+
+    return totalInput - totalOutput
   }
 
   /** @private */
@@ -409,16 +478,25 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
           index: utxo.tx_pos
         }
 
-        // Provide full previous transaction for broad compatibility
-        const prevHex = await getPrevTxHex(utxo.tx_hash)
-        psbt.addInput({
-          ...baseInput,
-          nonWitnessUtxo: Buffer.from(prevHex, 'hex')
-        })
+        if (this._signer.bip === 84) {
+          psbt.addInput({
+            ...baseInput,
+            witnessUtxo: {
+              script: fromHex(utxo.vout.scriptPubKey.hex),
+              value: utxo.vout.value
+            }
+          })
+        } else {
+          const prevHex = await getPrevTxHex(utxo.tx_hash)
+          psbt.addInput({
+            ...baseInput,
+            nonWitnessUtxo: fromHex(prevHex)
+          })
+        }
       }
 
-      psbt.addOutput({ address: to, value: Number(rcptVal) })
-      if (chgVal > 0n) psbt.addOutput({ address: await this.getAddress(), value: Number(chgVal) })
+      psbt.addOutput({ address: to, value: rcptVal })
+      if (chgVal > 0n) psbt.addOutput({ address: await this.getAddress(), value: chgVal })
 
       return psbt
     }

@@ -14,20 +14,22 @@
 
 'use strict'
 
-import { WalletAccountReadOnly } from '@tetherto/wdk-wallet'
+import { WalletAccountReadOnly, NoSuchElementError, ValueError } from '@tetherto/wdk-wallet'
 
 import { coinselect } from '@bitcoinerlab/coinselect'
-import { DescriptorsFactory } from '@bitcoinerlab/descriptors'
+import { Output } from '@bitcoinerlab/descriptors'
 import * as ecc from '@bitcoinerlab/secp256k1'
+import bitcoinMessageModule from '@bitcoinerlab/btcmessage'
 
 import { address as btcAddress, networks, Transaction } from 'bitcoinjs-lib'
-import bitcoinMessageModule from 'bitcoinjs-message'
+import { toHex } from 'uint8array-tools'
 
 import FailoverProvider from '@tetherto/wdk-failover-provider'
 
 import { BlockbookClient, ElectrumTcp, ElectrumSsl, ElectrumTls, ElectrumWs } from './transports/index.js'
 
-const bitcoinMessage = bitcoinMessageModule.default ?? bitcoinMessageModule
+const { MessageFactory } = bitcoinMessageModule.default ?? bitcoinMessageModule
+const bitcoinMessage = MessageFactory(ecc)
 
 /** @typedef {import('./transports/index.js').MempoolElectrumConfig} MempoolElectrumConfig */
 /** @typedef {import('./transports/index.js').MempoolElectrumClient} MempoolElectrumClient */
@@ -42,6 +44,16 @@ const bitcoinMessage = bitcoinMessageModule.default ?? bitcoinMessageModule
 /** @typedef {import('@tetherto/wdk-wallet').TransactionResult} TransactionResult */
 /** @typedef {import('@tetherto/wdk-wallet').TransferOptions} TransferOptions */
 /** @typedef {import('@tetherto/wdk-wallet').TransferResult} TransferResult */
+/** @typedef {import('@tetherto/wdk-wallet').TransactionReceipt} TransactionReceipt */
+/** @typedef {import('@tetherto/wdk-wallet').WaitForTransactionOptions} WaitForTransactionOptions */
+
+/**
+ * The bitcoin-specific fields added to a normalized transaction receipt.
+ *
+ * @typedef {Object} BtcTransactionDetails
+ * @property {number | null} confirmations - The confirmation depth (0 while pending, null when the chain tip can't be resolved).
+ * @property {BtcTransactionReceipt} transaction - The native bitcoinjs transaction.
+ */
 
 /**
  * @typedef {Object} BtcTransaction
@@ -73,16 +85,19 @@ const bitcoinMessage = bitcoinMessageModule.default ?? bitcoinMessageModule
  * @property {Omit<MempoolElectrumConfig, 'network'>} clientConfig - The Electrum client configuration.
  */
 
+/** @typedef {import('./signers/seed-signer-btc.js').BtcSignerConfig} BtcSignerConfig */
+
 /**
- * @typedef {Object} BtcWalletConfig
+ * @typedef {Object} BtcAccountConfig
  * @property {IBtcClient | BtcClientDescriptor | Array<IBtcClient | BtcClientDescriptor>} [client] - The bitcoin client, or a list of bitcoin client options for connection fallback.
- * @property {"bitcoin" | "regtest" | "testnet"} [network] - The name of the network to use (default: "bitcoin").
- * @property {44 | 84} [bip] - The BIP address type used for key and address derivation.
- *   - 44: [BIP-44 (P2PKH / legacy)](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
- *   - 84: [BIP-84 (P2WPKH / native SegWit)](https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki)
- *   - Default: 84 (P2WPKH).
  * @property {number} [retries] - The number of retries in the failover mechanism.
  * @property {number | bigint} [transactionMaxFee] - The maximum fee amount for sendTransaction and signTransaction operations.
+ */
+
+/**
+ * The wallet configuration, joining the signer configuration (network, bip) with the account configuration (client, retries, transactionMaxFee).
+ *
+ * @typedef {BtcSignerConfig & BtcAccountConfig} BtcWalletConfig
  */
 
 /**
@@ -92,10 +107,9 @@ const bitcoinMessage = bitcoinMessageModule.default ?? bitcoinMessageModule
  * @property {bigint} changeValue - The estimated change value in satoshis.
  */
 
-const { Output } = DescriptorsFactory(ecc)
-
 const MIN_TX_FEE_SATS = 141
 const MAX_UTXO_INPUTS = 200
+const FINAL_CONFIRMATIONS = 6
 
 const BIP_BY_ADDRESS_PREFIX = {
   1: 44,
@@ -184,6 +198,11 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
   /**
    * Returns the account's bitcoin balance.
    *
+   * When the client reports unconfirmedOutgoing, unconfirmed incoming funds
+   * aren't counted (since they aren't spendable yet) but unconfirmed
+   * outgoing funds are subtracted immediately. Clients that can't compute
+   * unconfirmedOutgoing fall back to netting the raw unconfirmed balance.
+   *
    * @returns {Promise<bigint>} The bitcoin balance (in satoshis).
    */
   async getBalance () {
@@ -191,7 +210,11 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
 
     const address = await this.getAddress()
 
-    const { confirmed, unconfirmed } = await this._client.getBalance(address)
+    const { confirmed, unconfirmed, unconfirmedOutgoing } = await this._client.getBalance(address)
+
+    if (unconfirmedOutgoing !== undefined) {
+      return BigInt(confirmed - unconfirmedOutgoing)
+    }
 
     return BigInt(confirmed + (unconfirmed || 0))
   }
@@ -245,6 +268,7 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
   /**
    * Returns a transaction's receipt.
    *
+   * @deprecated Use {@link getTransaction} instead, which returns a normalized, finality-based receipt. The raw bitcoinjs transaction remains available on its `transaction` property.
    * @param {string} hash - The transaction's hash.
    * @returns {Promise<BtcTransactionReceipt | null>} – The receipt, or null if the transaction has not been included in a block yet.
    */
@@ -268,6 +292,112 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
     const transaction = Transaction.fromHex(hex)
 
     return transaction
+  }
+
+  /**
+   * Returns a normalized, finality-based receipt for a transaction.
+   *
+   * @param {string} hash - The transaction's hash.
+   * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The normalized receipt.
+   * @throws {ValueError} If the hash is not a valid transaction hash.
+   * @throws {NoSuchElementError} If no transaction has been found for the given hash.
+   */
+  async getTransaction (hash) {
+    // Normalize to lowercase: txids are case-insensitive but Electrum reports
+    // them lowercase, so an uppercase input would otherwise false-miss below.
+    const txid = String(hash).trim().toLowerCase()
+
+    if (!/^[0-9a-f]{64}$/.test(txid)) {
+      throw new ValueError(`Invalid transaction hash: '${hash}'.`)
+    }
+
+    await this._ensureConnected()
+
+    const address = await this.getAddress()
+    const history = await this._client.getHistory(address)
+    const item = Array.isArray(history) ? history.find(h => h?.tx_hash?.toLowerCase() === txid) : null
+
+    if (!item) {
+      throw new NoSuchElementError(`No transaction found for '${txid}'.`)
+    }
+
+    const transaction = Transaction.fromHex(await this._client.getTransaction(txid))
+
+    if (!item.height || item.height <= 0) {
+      return {
+        hash: txid,
+        finality: 'pending',
+        confirmations: 0,
+        transaction
+      }
+    }
+
+    const confirmations = await this._getConfirmations(item.height)
+
+    return {
+      hash: txid,
+      finality: confirmations !== null && confirmations >= FINAL_CONFIRMATIONS ? 'final' : 'confirmed',
+      success: true,
+      block: item.height,
+      confirmations,
+      transaction
+    }
+  }
+
+  /**
+   * Blocks until a transaction reaches the requested finality target, or times out.
+   *
+   * Note: there is no `dropped` path on BTC. A mempool eviction (the transaction
+   * disappearing from the address history) is indistinguishable from a not-yet-seen
+   * transaction, so it is treated as still-pending. A dropped transaction therefore
+   * surfaces as a {@link TimeoutError} rather than resolving to a `dropped` receipt.
+   *
+   * @param {string} hash - The transaction's hash.
+   * @param {WaitForTransactionOptions} [options] - The wait options.
+   * @returns {Promise<TransactionReceipt & BtcTransactionDetails>} The terminal receipt for the finality target reached (inspect `success` to tell success from revert).
+   * @throws {TimeoutError} If the target is not reached before the timeout.
+   */
+  async waitForTransaction (hash, options = {}) {
+    return await super.waitForTransaction(hash, options)
+  }
+
+  /**
+   * Returns the confirmation depth for a transaction included at the given block height, or null when the chain tip can't be resolved.
+   *
+   * @protected
+   * @param {number} height - The block height the transaction was included in.
+   * @returns {Promise<number | null>} The confirmation depth, or null.
+   */
+  async _getConfirmations (height) {
+    if (typeof this._client.getBlockHeight !== 'function') {
+      return null
+    }
+
+    const tip = await this._client.getBlockHeight()
+
+    if (!tip || tip < height) {
+      return null
+    }
+
+    return tip - height + 1
+  }
+
+  /**
+   * The default poll cadence for {@link waitForTransaction}, in milliseconds. Set to 30 seconds to suit bitcoin's ~10-minute block time.
+   *
+   * @type {number}
+   */
+  get defaultWaitInterval () {
+    return 30000
+  }
+
+  /**
+   * The default time budget for {@link waitForTransaction}, in milliseconds. Set to 1 hour to allow for bitcoin's slower inclusion and confirmation.
+   *
+   * @type {number}
+   */
+  get defaultWaitTimeout () {
+    return 3600000
   }
 
   /**
@@ -462,7 +592,7 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
 
     const network = this._network
 
-    const fromAddressScriptHex = btcAddress.toOutputScript(fromAddress, network).toString('hex')
+    const fromAddressScriptHex = toHex(btcAddress.toOutputScript(fromAddress, network))
     const fromAddressOutput = new Output({ descriptor: `addr(${fromAddress})`, network })
     const toAddressOutput = new Output({ descriptor: `addr(${toAddress})`, network })
 
@@ -474,14 +604,14 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
 
     const utxosForCoinSelect = unspent.map(u => ({
       output: fromAddressOutput,
-      value: u.value,
+      value: this._toBigInt(u.value),
       __ref: u
     }))
 
     const result = coinselect({
       utxos: utxosForCoinSelect,
       remainder: fromAddressOutput,
-      targets: [{ output: toAddressOutput, value: Number(amount) }],
+      targets: [{ output: toAddressOutput, value: amount }],
       feeRate: Number(feeRate)
     })
 
@@ -493,7 +623,7 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
       throw new Error('Exceeded maximum allowed inputs for transaction.')
     }
 
-    const fee = this._toBigInt(Math.max(result.fee ?? 0, MIN_TX_FEE_SATS))
+    const fee = result.fee > BigInt(MIN_TX_FEE_SATS) ? result.fee : BigInt(MIN_TX_FEE_SATS)
 
     const utxos = result.utxos.map(({ __ref }) => ({
       ...__ref,
