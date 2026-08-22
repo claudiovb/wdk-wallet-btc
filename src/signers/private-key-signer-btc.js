@@ -16,33 +16,35 @@
 
 import { networks, Psbt } from 'bitcoinjs-lib'
 import { ECPair } from '@bitcoinerlab/descriptors'
-import { InvalidSignerError } from '@tetherto/wdk-wallet'
+import { InvalidSignerError, ValueError } from '@tetherto/wdk-wallet'
 
 // eslint-disable-next-line camelcase
 import { sodium_memzero } from 'sodium-universal'
 
 import { normalizeConfig, getAddressFromPublicKey, signMessage, signPsbtWithKey } from './utils.js'
-import { ISignerBtc } from './seed-signer-btc.js'
 
-/** @typedef {import('./seed-signer-btc.js').BtcSignerConfig} BtcSignerConfig */
+/** @typedef {import('./signer-btc.js').ISignerBtc} ISignerBtc */
+/** @typedef {import('./signer-btc.js').BtcSignerConfig} BtcSignerConfig */
 /** @typedef {import('@tetherto/wdk-wallet').KeyPair} KeyPair */
 
 /**
- * @extends {ISignerBtc}
  * Signer backed by a single raw private key (non-HD).
  *
- * Does not support HD derivation, extended keys, or master fingerprint.
- * Signs messages and PSBTs directly using the leaf key.
+ * Does not support HD derivation or extended keys. Signs messages and PSBTs directly using
+ * the leaf key.
+ *
+ * @implements {ISignerBtc}
  */
-export default class PrivateKeySignerBtc extends ISignerBtc {
+export default class PrivateKeySignerBtc {
   /**
    * Creates a new private key signer.
    *
    * @param {string | Uint8Array | Buffer} privateKey - The raw private key (hex string or 32 bytes).
    * @param {BtcSignerConfig} [config] - The signer configuration.
+   * @throws {ValueError} If the private key is not 32 bytes.
+   * @throws {ValueError} If an unsupported BIP is specified.
    */
   constructor (privateKey, config = {}) {
-    super()
     config = normalizeConfig(config)
 
     let pkBuf
@@ -56,24 +58,26 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
     }
 
     if (pkBuf.length !== 32) {
-      throw new Error('PrivateKeySignerBtc: privateKey must be 32-byte Buffer or 64-char hex')
+      throw new ValueError('The private key must be 32 bytes.')
     }
-    const account = ECPair.fromPrivateKey(pkBuf)
     const network = networks[config.network] || networks.bitcoin
-    const address = getAddressFromPublicKey(account.publicKey, network, config.bip)
+    const account = ECPair.fromPrivateKey(pkBuf)
     /**
      * @private
      * @type {BtcSignerConfig}
      */
     this._config = config
     /** @private */
+    this._network = network
+    /** @private */
     this._account = account
     /** @private */
-    this._address = address
+    this._address = getAddressFromPublicKey(account.publicKey, network, config.bip)
   }
 
   /**
-   * Whether this signer can derive child signers. Always false for private-key signers.
+   * Whether this signer can derive child signers. Always false: a private-key signer is a
+   * single standalone account and is bound directly to a wallet account.
    *
    * @type {boolean}
    */
@@ -82,51 +86,12 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
   }
 
   /**
-   * The account index. Always undefined for private-key signers.
+   * The derivation path. Always null for private-key signers.
    *
-   * @type {number | undefined}
-   */
-  get index () {
-    return undefined
-  }
-
-  /**
-   * The derivation path. Always undefined for private-key signers.
-   *
-   * @type {string | undefined}
+   * @type {string | null}
    */
   get path () {
-    return undefined
-  }
-
-  /**
-   * The account's key pair (public and private keys).
-   *
-   * @type {KeyPair}
-   */
-  get keyPair () {
-    return {
-      privateKey: this._account ? this._account.privateKey : null,
-      publicKey: this._account.publicKey
-    }
-  }
-
-  /**
-   * The signer configuration.
-   *
-   * @type {BtcSignerConfig}
-   */
-  get config () {
-    return this._config
-  }
-
-  /**
-   * The BIP standard of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
-   *
-   * @type {number}
-   */
-  get bip () {
-    return this._config.bip
+    return null
   }
 
   /**
@@ -139,15 +104,37 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
   }
 
   /**
-   * Returns the account's derived address.
-   * @returns {Promise<string>}
+   * The name of the network the signer's addresses are encoded for.
+   *
+   * @type {"bitcoin" | "regtest" | "testnet"}
    */
-  async getAddress () {
-    return this._address
+  get network () {
+    return this._config.network ?? 'bitcoin'
   }
 
   /**
-   * Not supported for private key signers.
+   * The BIP address type of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
+   *
+   * @type {44 | 84}
+   */
+  get bip () {
+    return this._config.bip
+  }
+
+  /**
+   * The account's key pair (public and private keys).
+   *
+   * @type {KeyPair}
+   */
+  get keyPair () {
+    return {
+      privateKey: this._account ? this._account.privateKey : null,
+      publicKey: this._account ? this._account.publicKey : null
+    }
+  }
+
+  /**
+   * PrivateKeySignerBtc is not a hierarchical signer and cannot derive.
    *
    * @returns {Promise<never>}
    * @throws {InvalidSignerError} Always — private-key signers do not support derivation.
@@ -157,9 +144,19 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
   }
 
   /**
-   * Not available for private key signers.
+   * Returns the account's derived address.
    *
-   * @throws {InvalidSignerError} Always throws since extended keys require HD derivation.
+   * @returns {Promise<string>} The account's address.
+   */
+  async getAddress () {
+    return this._address
+  }
+
+  /**
+   * PrivateKeySignerBtc is not a hierarchical signer and has no extended keys.
+   *
+   * @returns {Promise<never>}
+   * @throws {InvalidSignerError} Always — extended keys require HD derivation.
    */
   async getExtendedPublicKey () {
     throw new InvalidSignerError('Extended public key is unavailable for private-key imported signers.')
@@ -183,8 +180,7 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
    */
   async signPsbt (psbt) {
     const psbtInstance = typeof psbt === 'string' ? Psbt.fromBase64(psbt) : psbt
-    const network = networks[this._config.network] || networks.bitcoin
-    return signPsbtWithKey(psbtInstance, this._account, this._config.bip, network)
+    return signPsbtWithKey(psbtInstance, this._account, this._config.bip, this._network)
   }
 
   /**
@@ -192,16 +188,8 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
    */
   dispose () {
     if (this._account) {
-      if (this._account.privateKey) {
-        sodium_memzero(this._account.privateKey)
-        Object.defineProperty(this._account, 'privateKey', {
-          get: () => null,
-          configurable: true
-        })
-      }
-      if (this._account.chainCode) {
-        sodium_memzero(this._account.chainCode)
-      }
+      sodium_memzero(this._account.privateKey)
     }
+    this._account = undefined
   }
 }

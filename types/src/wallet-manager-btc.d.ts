@@ -1,15 +1,33 @@
 export default class WalletManagerBtc extends WalletManager {
     /**
-     * Creates a new wallet manager for the bitcoin blockchain.
+     * Creates a new wallet manager for the bitcoin blockchain from a BIP-39 seed.
      *
-     * Accepts either a BIP-39 seed (string mnemonic or raw Uint8Array) for
-     * backwards compatibility, or an {@link ISigner} instance for the new
-     * signer-based workflow.
-     *
-     * @param {string | Uint8Array | ISigner} seedOrSigner - A BIP-39 seed phrase, raw seed bytes, or a root signer. Root signers must be derivable — non-derivable signers (e.g. private-key signers) can only be registered by name via {@link addSigner}.
+     * @param {string | Uint8Array} seed - The BIP-39 seed phrase or raw seed bytes.
      * @param {BtcWalletConfig} [config] - The configuration object.
+     * @throws {ValueError} If the seed phrase is invalid.
      */
-    constructor(seedOrSigner: string | Uint8Array | ISigner, config?: BtcWalletConfig);
+    constructor(seed: string | Uint8Array, config?: BtcWalletConfig);
+    /**
+     * Creates a new wallet manager for the bitcoin blockchain from a default signer.
+     *
+     * The default signer must be derivable (it must be able to derive child accounts);
+     * non-derivable signers (e.g. private-key signers) are not allowed as the default but
+     * may be registered by name via {@link addSigner}.
+     * **Warning:** the signer is kept exactly as given, not cloned. Disposing it directly breaks
+     * further account derivation, and the manager never disposes a signer you supplied.
+     *
+     * @param {ISigner} signer - The default signer.
+     * @param {BtcWalletConfig} [config] - The configuration object.
+     * @throws {InvalidSignerError} If the default signer does not support account derivation.
+     */
+    constructor(signer: ISigner, config?: BtcWalletConfig);
+    /**
+     * If true, disposes the default signer on calls to the 'dispose' method.
+     *
+     * @protected
+     * @type {boolean}
+     */
+    protected _shouldWipeDefaultSignerOnDisposal: boolean;
     /**
      * A list of all the bitcoin client options.
      *
@@ -25,15 +43,18 @@ export default class WalletManagerBtc extends WalletManager {
      */
     protected _client: IBtcClient;
     /**
-     * Returns the wallet account at a specific index, or the account associated with a registered
-     * signer name (defaults to [BIP-84](https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki);
-     * set config.bip=44 for [BIP-44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)).
+     * Returns the wallet account at a specific index.
+     *
+     * **Warning:** derivation is relative to the signer's own path. If the signer sits at a leaf
+     * (e.g. m/84'/0'/0'/0/0), getAccount(1) derives m/84'/0'/0'/0/0/0'/0/1 — probably not what
+     * you want; use a signer at the purpose/coin-type root (e.g. m/84'/0').
      *
      * @param {number} [index] - The index of the account to get (default: 0).
      * @param {Object} [options] - Account options.
      * @param {string} [options.signerName] - The signer name. Omit to use the default signer.
      * @returns {Promise<WalletAccountBtc>} The account.
-     *
+     * @throws {NoSuchElementError} If a signer name is given but no signer exists with that name.
+     * @throws {InvalidSignerError} If the signer doesn't support account derivation.
      * @example
      * // Returns the account with derivation path
      * // For mainnet (bitcoin): m/84'/0'/0'/0/1
@@ -43,6 +64,18 @@ export default class WalletManagerBtc extends WalletManager {
     getAccount(index?: number, options?: {
         signerName?: string;
     }): Promise<WalletAccountBtc>;
+    /**
+     * Returns the wallet account associated with a registered signer.
+     *
+     * **Warning:** the returned account wraps the registered signer itself, exactly where it
+     * sits - e.g. a second seed registered at the intermediate path "m/84'/0'" yields the
+     * account AT "m/84'/0'", not at a derived leaf, which is rarely what you want to transact
+     * with. Disposing the returned account leaves the registered signer untouched.
+     *
+     * @param {string} signerName - The signer name registered via {@link addSigner}.
+     * @returns {Promise<WalletAccountBtc>} The account.
+     * @throws {NoSuchElementError} If no signer exists with the given name.
+     */
     getAccount(signerName: string): Promise<WalletAccountBtc>;
     /**
      * Returns the wallet account at a specific derivation path.
@@ -56,21 +89,18 @@ export default class WalletManagerBtc extends WalletManager {
      * @param {Object} [options] - Account options.
      * @param {string} [options.signerName] - The signer name. Omit to use the default signer.
      * @returns {Promise<WalletAccountBtc>} The account.
-     * @throws {Error} If a signer name is given but no signer exists with that name.
+     * @throws {NoSuchElementError} If a signer name is given but no signer exists with that name.
      * @throws {InvalidSignerError} If the signer doesn't support account derivation.
      */
     getAccountByPath(path: string, options?: {
         signerName?: string;
     }): Promise<WalletAccountBtc>;
     /**
-     * Returns the relative ("0'/0/0") portion of a signer's full derivation path, or the default
-     * account path when the signer has no path of its own (e.g. a seed root).
+     * Returns the current fee rates.
      *
-     * @private
-     * @param {ISignerBtc} signer - The signer.
-     * @returns {string} The relative derivation path.
+     * @returns {Promise<FeeRates>} The fee rates (in satoshis).
      */
-    private _relativePath;
+    getFeeRates(): Promise<FeeRates>;
     /**
      * A list that maps each client to a flag that is true only if the client was externally provided.
      *
@@ -78,11 +108,19 @@ export default class WalletManagerBtc extends WalletManager {
      * @type {Array<boolean>}
      */
     protected get _isExternalClient(): Array<boolean>;
+    /**
+     * Disposes all the wallet accounts, erasing their private keys from the memory and closing all internal connections.
+     * The default signer is wiped only if the manager created it internally from a seed.
+     */
+    dispose(): void;
 }
 export type FeeRates = import("@tetherto/wdk-wallet").FeeRates;
 export type ISigner = import("@tetherto/wdk-wallet").ISigner;
+export type NoSuchElementError = import("@tetherto/wdk-wallet").NoSuchElementError;
+export type ValueError = import("@tetherto/wdk-wallet").ValueError;
+export type InvalidSignerError = import("@tetherto/wdk-wallet").InvalidSignerError;
 export type BtcWalletConfig = import("./wallet-account-btc.js").BtcWalletConfig;
-export type ISignerBtc = import("./signers/seed-signer-btc.js").ISignerBtc;
+export type ISignerBtc = import("./signers/signer-btc.js").ISignerBtc;
 export type IBtcClient = import("./transports/index.js").IBtcClient;
 import WalletManager from '@tetherto/wdk-wallet';
 import WalletAccountBtc from './wallet-account-btc.js';

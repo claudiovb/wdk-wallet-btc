@@ -85,7 +85,7 @@ const bitcoinMessage = MessageFactory(ecc)
  * @property {Omit<MempoolElectrumConfig, 'network'>} clientConfig - The Electrum client configuration.
  */
 
-/** @typedef {import('./signers/seed-signer-btc.js').BtcSignerConfig} BtcSignerConfig */
+/** @typedef {import('./signers/signer-btc.js').BtcSignerConfig} BtcSignerConfig */
 
 /**
  * @typedef {Object} BtcAccountConfig

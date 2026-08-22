@@ -17,13 +17,14 @@ import { payments, Transaction } from 'bitcoinjs-lib'
 import bitcoinMessageModule from '@bitcoinerlab/btcmessage'
 import * as ecc from '@bitcoinerlab/secp256k1'
 import { toBase64, compare } from 'uint8array-tools'
+import { ValueError } from '@tetherto/wdk-wallet'
 
 const { MessageFactory } = bitcoinMessageModule.default ?? bitcoinMessageModule
 const bitcoinMessage = MessageFactory(ecc)
 
 /** @typedef {import('bitcoinjs-lib').Network} Network */
 /** @typedef {import('bitcoinjs-lib').Psbt} Psbt */
-/** @typedef {import('./seed-signer-btc.js').BtcSignerConfig} BtcSignerConfig */
+/** @typedef {import('./signer-btc.js').BtcSignerConfig} BtcSignerConfig */
 /** @typedef {import('ecpair').ECPairInterface | import('bip32').BIP32Interface} SignerLike */
 /**
   * @typedef {Object} InputOwnershipResult
@@ -138,12 +139,12 @@ export function signPsbtWithKey (psbtInstance, account, bip, network) {
  *
  * @param {BtcSignerConfig} [config] - The configuration object.
  * @returns {BtcSignerConfig} The normalized configuration.
- * @throws {Error} If an unsupported BIP is specified.
+ * @throws {ValueError} If an unsupported BIP is specified.
  */
 export function normalizeConfig (config = {}) {
   const bip = config.bip ?? 84
   if (![44, 84].includes(bip)) {
-    throw new Error('Invalid bip specification. Supported bips: 44, 84.')
+    throw new ValueError('Invalid bip specification. Supported bips: 44, 84.')
   }
   return { network: config.network, bip }
 }

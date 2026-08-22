@@ -17,7 +17,7 @@ import { address as btcAddress, Psbt, Transaction } from 'bitcoinjs-lib'
 import pLimit from 'p-limit'
 import { LRUCache } from 'lru-cache'
 import PrivateKeySignerBtc from './signers/private-key-signer-btc.js'
-import SeedSignerBtc from './signers/seed-signer-btc.js'
+import SeedSignerBtc, { getBtcDerivationPathPrefix } from './signers/seed-signer-btc.js'
 import WalletAccountReadOnlyBtc from './wallet-account-read-only-btc.js'
 import { compare, fromHex, toHex } from 'uint8array-tools'
 
@@ -32,7 +32,12 @@ import { compare, fromHex, toHex } from 'uint8array-tools'
 /** @typedef {import('./wallet-account-read-only-btc.js').BtcWalletConfig} BtcWalletConfig */
 /** @typedef {import('./wallet-account-read-only-btc.js').BtcAccountConfig} BtcAccountConfig */
 
-/** @typedef {import('./signers/seed-signer-btc.js').ISignerBtc} ISignerBtc */
+/** @typedef {import('./signers/signer-btc.js').ISignerBtc} ISignerBtc */
+
+/**
+ * @typedef {Object} SignerOptions
+ * @property {boolean} [shouldWipeSignerOnDisposal] - If true, wipes the signer given at construction on calls to the 'dispose' method.
+ */
 
 /**
  * @typedef {Object} BtcTransfer
@@ -68,53 +73,50 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    *
    * @overload
    * @param {ISignerBtc} signer - The signer.
-   * @param {BtcAccountConfig} [config] - The configuration object. The network and BIP are taken from the signer.
+   * @param {BtcAccountConfig & SignerOptions} [config] - The configuration object. The network and BIP are taken from the signer.
    */
 
   constructor (seedOrSigner, pathOrConfig = {}, config = {}) {
+    const isSeed = typeof seedOrSigner === 'string' || seedOrSigner instanceof Uint8Array
+
     let signer, configuration
-    if (typeof seedOrSigner === 'string' || seedOrSigner instanceof Uint8Array) {
+    if (isSeed) {
       const { network, bip, ...accountConfig } = config
-      signer = new SeedSignerBtc(seedOrSigner, { network, bip }, { path: pathOrConfig, isChild: true })
+      signer = new SeedSignerBtc(seedOrSigner, `m/${getBtcDerivationPathPrefix({ network, bip })}/${pathOrConfig}`, { network, bip })
       configuration = accountConfig
     } else {
       signer = seedOrSigner
       configuration = pathOrConfig
     }
 
-    super(signer.address, { ...configuration, network: signer.config.network, bip: signer.bip })
+    super(signer.address, { ...configuration, network: signer.network, bip: signer.bip })
+
+    /**
+     * If true, disposes the signer on calls to the 'dispose' method.
+     *
+     * @protected
+     * @type {boolean}
+     */
+    this._shouldWipeSignerOnDisposal = isSeed || Boolean(configuration.shouldWipeSignerOnDisposal)
 
     /** @private */
     this._signer = signer
   }
 
   /**
-   * Returns the account's address. If not set at construction time (e.g. lazy hardware signers),
-   * it asks the underlying signer to resolve it, then caches it locally.
+   * Returns the account's address.
    *
    * @returns {Promise<string>} The account's address.
    */
   async getAddress () {
-    if (this._address) return this._address
-    const addr = await this._signer.getAddress()
-    // Cache inside the read-only base shape
-    this.__address = addr
-    return addr
+    return await this._signer.getAddress()
   }
 
   /**
-   * The derivation path's index of this account.
+   * The derivation path of this account, or null if the account's signer is not bound to a
+   * derivation position (e.g. private-key signers).
    *
-   * @type {number}
-   */
-  get index () {
-    return this._signer.index
-  }
-
-  /**
-   * The derivation path of this account.
-   *
-   * @type {string}
+   * @type {string | null}
    */
   get path () {
     return this._signer.path
@@ -127,7 +129,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    * it's strongly recommended to treat the key pair as a read-only view of the keys. While it's still technically possible to alter their
    * content, client code should never do so.
    *
-   * @type {KeyPair}
+   * @type {KeyPair | null}
    */
   get keyPair () {
     return this._signer.keyPair
@@ -143,7 +145,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
   static fromPrivateKey (privateKey, config = {}) {
     const { network, bip, ...accountConfig } = config
     const signer = new PrivateKeySignerBtc(privateKey, { network, bip })
-    return new WalletAccountBtc(signer, accountConfig)
+    return new WalletAccountBtc(signer, { ...accountConfig, shouldWipeSignerOnDisposal: true })
   }
 
   /**
@@ -419,9 +421,12 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
 
   /**
    * Disposes the wallet account, erasing the private key from memory and closing the connection with the server.
+   * The signer given at construction is wiped only if the account owns it (see {@link SignerOptions}).
    */
   dispose () {
-    this._signer.dispose()
+    if (this._shouldWipeSignerOnDisposal) {
+      this._signer.dispose()
+    }
     super.dispose()
   }
 

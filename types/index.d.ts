@@ -1,6 +1,7 @@
 export { default } from "./src/wallet-manager-btc.js";
 export { default as WalletAccountReadOnlyBtc } from "./src/wallet-account-read-only-btc.js";
 export { default as WalletAccountBtc } from "./src/wallet-account-btc.js";
+export { ISigner } from "@tetherto/wdk-wallet";
 export type BtcTransactionReceipt = import("bitcoinjs-lib").Transaction;
 export type FeeRates = import("@tetherto/wdk-wallet").FeeRates;
 export type KeyPair = import("@tetherto/wdk-wallet").KeyPair;

@@ -1,6 +1,6 @@
 /** @typedef {import('bitcoinjs-lib').Network} Network */
 /** @typedef {import('bitcoinjs-lib').Psbt} Psbt */
-/** @typedef {import('./seed-signer-btc.js').BtcSignerConfig} BtcSignerConfig */
+/** @typedef {import('./signer-btc.js').BtcSignerConfig} BtcSignerConfig */
 /** @typedef {import('ecpair').ECPairInterface | import('bip32').BIP32Interface} SignerLike */
 /**
  * Signs every PSBT input owned by the given leaf key, in place.
@@ -22,7 +22,7 @@ export function signPsbtWithKey(psbtInstance: Psbt, account: SignerLike, bip: nu
  *
  * @param {BtcSignerConfig} [config] - The configuration object.
  * @returns {BtcSignerConfig} The normalized configuration.
- * @throws {Error} If an unsupported BIP is specified.
+ * @throws {ValueError} If an unsupported BIP is specified.
  */
 export function normalizeConfig(config?: BtcSignerConfig): BtcSignerConfig;
 /**
@@ -45,5 +45,6 @@ export function getAddressFromPublicKey(publicKey: Uint8Array, network: Network,
 export function signMessage(message: string, privateKey: Uint8Array, bip: number): string;
 export type Network = import("bitcoinjs-lib").Network;
 export type Psbt = import("bitcoinjs-lib").Psbt;
-export type BtcSignerConfig = import("./seed-signer-btc.js").BtcSignerConfig;
+export type BtcSignerConfig = import("./signer-btc.js").BtcSignerConfig;
+export type ValueError = import("@tetherto/wdk-wallet").ValueError;
 export type SignerLike = import("ecpair").ECPairInterface | import("bip32").BIP32Interface;

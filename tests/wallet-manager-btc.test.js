@@ -1,20 +1,51 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals'
 
+import { HOST, PORT, ELECTRUM_PORT, ZMQ_PORT, DATA_DIR } from './config.js'
+
+import { BitcoinCli, Waiter } from './helpers/index.js'
+
 import WalletManagerBtc, { WalletAccountBtc } from '../index.js'
 import SeedSignerBtc, { PrivateKeySignerBtc } from '../src/signers/index.js'
+
 const SEED_PHRASE = 'cook voyage document eight skate token alien guide drink uncle term abuse'
+
+// Derived independently of the wallet's seed; registered as a named signer in tests.
 const PRIVATE_KEY = '15e083525dac99a2a9bba8f14a6eed9704a77c5994b1a9b4d7271ebd353b7966'
+const PRIVATE_KEY_ADDRESS = 'bc1q9lpn7ks92lekmr6m0gpy4qyzyq8g98nufpddma'
+
+// The regtest address of the default account ("m/84'/1'/0'/0/0") for SEED_PHRASE.
+const REGTEST_ACCOUNT_0_ADDRESS = 'bcrt1q8dqnpagwt9rtl7k38nuaa2ahf690avzkm74nhn'
+
+const NON_DERIVABLE_SIGNER_MESSAGE = 'The default signer must be derivable. Non-derivable signers (e.g. private-key signers) can only be registered by name via addSigner.'
 
 describe('WalletManagerBtc', () => {
   let wallet
 
   beforeEach(() => {
-    const signer = new SeedSignerBtc(SEED_PHRASE)
-    wallet = new WalletManagerBtc(signer)
+    const root = new SeedSignerBtc(SEED_PHRASE, "m/84'/1'")
+    wallet = new WalletManagerBtc(root)
   })
 
   afterEach(() => {
     wallet.dispose()
+  })
+
+  describe('constructor', () => {
+    test('should throw if the default signer is not derivable', () => {
+      const pk = new PrivateKeySignerBtc(PRIVATE_KEY)
+
+      expect(() => new WalletManagerBtc(pk)) // eslint-disable-line no-new
+        .toThrow(NON_DERIVABLE_SIGNER_MESSAGE)
+
+      pk.dispose()
+    })
+
+    test('should throw if the default signer is a bare ISigner without isDerivable', () => {
+      const bareSigner = { derive: async () => {}, signPsbt: async () => {}, getAddress: async () => '', dispose: () => {} }
+
+      expect(() => new WalletManagerBtc(bareSigner)) // eslint-disable-line no-new
+        .toThrow(NON_DERIVABLE_SIGNER_MESSAGE)
+    })
   })
 
   describe('getAccount', () => {
@@ -34,8 +65,69 @@ describe('WalletManagerBtc', () => {
       expect(account.path).toBe("m/84'/1'/0'/0/3")
     })
 
+    test('should return the same cached account instance for the same index', async () => {
+      const first = await wallet.getAccount(1)
+      const second = await wallet.getAccount(1)
+
+      expect(second).toBe(first)
+    })
+
     test('should throw if the index is a negative number', async () => {
-      await expect(wallet.getAccount(-1)).rejects.toThrow(/Invalid format/)
+      await expect(wallet.getAccount(-1))
+        .rejects.toThrow(`Invalid format: Expected /^(m\\/)?(\\d+'?\\/)*\\d+'?$/ but received "0'/0/-1"`)
+    })
+
+    test('should derive from a named signer via options.signerName', async () => {
+      wallet.addSigner('secondary', new SeedSignerBtc(SEED_PHRASE, "m/84'/1'"))
+
+      const account = await wallet.getAccount(2, { signerName: 'secondary' })
+
+      expect(account).toBeInstanceOf(WalletAccountBtc)
+      expect(account.path).toBe("m/84'/1'/0'/0/2")
+    })
+
+    test('should throw if the named signer does not exist', async () => {
+      await expect(wallet.getAccount(0, { signerName: 'missing' }))
+        .rejects.toThrow('No signer found with name "missing".')
+    })
+
+    test('should return the account of a named private key signer (string overload)', async () => {
+      wallet.addSigner('hot', new PrivateKeySignerBtc(PRIVATE_KEY))
+
+      const account = await wallet.getAccount('hot')
+
+      expect(account).toBeInstanceOf(WalletAccountBtc)
+      expect(await account.getAddress()).toBe(PRIVATE_KEY_ADDRESS)
+    })
+
+    test('should throw if the named signer does not exist (string overload)', async () => {
+      await expect(wallet.getAccount('missing'))
+        .rejects.toThrow('No signer found with name "missing".')
+    })
+
+    test('should use the named signer as given without taking ownership of it', async () => {
+      const named = new SeedSignerBtc(SEED_PHRASE)
+      wallet.addSigner('seed', named)
+
+      const account = await wallet.getAccount('seed')
+
+      expect(account).toBeInstanceOf(WalletAccountBtc)
+      expect(account.path).toBe("m/84'/1'/0'/0/0")
+
+      // The registered signer is wrapped as-is but stays consumer-owned, so disposing
+      // the returned account must leave the signer fully usable.
+      account.dispose()
+      await expect(named.derive('0')).resolves.toBeInstanceOf(SeedSignerBtc)
+
+      named.dispose()
+    })
+
+    test('should mirror the registered signer\'s own (non-default) path', async () => {
+      wallet.addSigner('atFive', new SeedSignerBtc(SEED_PHRASE, "m/84'/1'/0'/0/5"))
+
+      const account = await wallet.getAccount('atFive')
+
+      expect(account.path).toBe("m/84'/1'/0'/0/5")
     })
   })
 
@@ -48,9 +140,76 @@ describe('WalletManagerBtc', () => {
       expect(account.path).toBe("m/84'/1'/1'/2/3")
     })
 
+    test('should return the same cached account instance for the same path', async () => {
+      const first = await wallet.getAccountByPath("0'/0/7")
+      const second = await wallet.getAccountByPath("0'/0/7")
+
+      expect(second).toBe(first)
+    })
+
+    test('should derive from a named signer via options.signerName', async () => {
+      wallet.addSigner('secondary', new SeedSignerBtc(SEED_PHRASE, "m/84'/1'"))
+
+      const account = await wallet.getAccountByPath("0'/0/0", { signerName: 'secondary' })
+
+      expect(account.path).toBe("m/84'/1'/0'/0/0")
+    })
+
+    test('should not collide across signer names with the same path', async () => {
+      wallet.addSigner('secondary', new SeedSignerBtc(SEED_PHRASE, "m/84'/1'"))
+
+      const accountDefault = await wallet.getAccountByPath("0'/0/5")
+      const accountNamed = await wallet.getAccountByPath("0'/0/5", { signerName: 'secondary' })
+
+      expect(accountNamed).not.toBe(accountDefault)
+      expect(accountDefault.path).toBe("m/84'/1'/0'/0/5")
+      expect(accountNamed.path).toBe("m/84'/1'/0'/0/5")
+    })
+
     test('should throw if the path is invalid', async () => {
       await expect(wallet.getAccountByPath("a'/b/c"))
-        .rejects.toThrow(/Invalid format/)
+        .rejects.toThrow(`Invalid format: Expected /^(m\\/)?(\\d+'?\\/)*\\d+'?$/ but received "a'/b/c"`)
+    })
+
+    test('should throw when deriving from a named private key signer', async () => {
+      wallet.addSigner('hot', new PrivateKeySignerBtc(PRIVATE_KEY))
+
+      await expect(wallet.getAccountByPath("0'/0/0", { signerName: 'hot' }))
+        .rejects.toThrow('PrivateKeySignerBtc does not support derivation.')
+    })
+
+    test('should propagate the wallet configuration to derived accounts', async () => {
+      const bitcoin = new BitcoinCli({
+        host: HOST,
+        port: PORT,
+        zmqPort: ZMQ_PORT,
+        dataDir: DATA_DIR,
+        wallet: 'testwallet'
+      })
+      const waiter = new Waiter(bitcoin, { host: HOST, electrumPort: ELECTRUM_PORT, zmqPort: ZMQ_PORT })
+
+      const wallet = new WalletManagerBtc(SEED_PHRASE, {
+        network: 'regtest',
+        transactionMaxFee: 0,
+        client: { type: 'electrum', clientConfig: { host: HOST, port: ELECTRUM_PORT } }
+      })
+
+      const account = await wallet.getAccount(0)
+      bitcoin.sendToAddress(REGTEST_ACCOUNT_0_ADDRESS, 0.01)
+      await waiter.mine()
+
+      const recipient = bitcoin.getNewAddress()
+      await expect(account.sendTransaction({ to: recipient, value: 1_000, feeRate: 1 }))
+        .rejects.toThrow('Exceeded maximum fee cost for transaction operation.')
+
+      const account1 = await wallet.getAccount(1)
+
+      expect(account1._config.network).toBe('regtest')
+      expect(account1._config.bip).toBe(84)
+      expect(account1._config.transactionMaxFee).toBe(0)
+      expect(account1._config.client).toBe(wallet._clientList)
+
+      wallet.dispose()
     })
   })
 
@@ -75,138 +234,73 @@ describe('WalletManagerBtc', () => {
       })
     })
   })
-  describe('signer management', () => {
-    test('getSigner() returns the default signer registered at construction', () => {
-      const def = wallet.getSigner()
-      expect(def.isDerivable).toBe(true)
+
+  describe('dispose', () => {
+    test('should dispose the wallet and erase the private keys of the accounts', async () => {
+      const account0 = await wallet.getAccount(0)
+      const account1 = await wallet.getAccount(1)
+
+      wallet.dispose()
+
+      const MESSAGE = 'Hello, world!'
+
+      for (const account of [account0, account1]) {
+        expect(account.keyPair.privateKey).toBeNull()
+
+        // Once disposed, the underlying signer is cleared, so any signing operation
+        // fails when it reaches the now-undefined signer rather than for some other reason.
+        await expect(account.sign(MESSAGE))
+          .rejects.toThrow(/Cannot read properties of undefined \(reading 'privateKey'\)/)
+      }
     })
 
-    test('addSigner registers a signer retrievable via getSigner', async () => {
-      const base = wallet.getSigner()
-      const altSigner = await base.derive("0'/0/0")
-      wallet.addSigner('alt', altSigner)
+    test('should dispose the internally created default signer when constructed from a seed', () => {
+      const wallet = new WalletManagerBtc(SEED_PHRASE)
+      const defaultSigner = wallet.getSigner()
 
-      const got = wallet.getSigner('alt')
-      expect(got).toBe(altSigner)
+      wallet.dispose()
+
+      expect(defaultSigner.keyPair.privateKey).toBeNull()
     })
 
-    test('getAccountByPath with signerName uses that signer and derives path', async () => {
-      const altSigner = new SeedSignerBtc(SEED_PHRASE)
-      wallet.addSigner('alt', altSigner)
+    test('should not dispose a default signer supplied at construction', async () => {
+      const root = new SeedSignerBtc(SEED_PHRASE, "m/84'/1'")
+      const wallet = new WalletManagerBtc(root)
 
-      const acc = await wallet.getAccountByPath("1'/2/3", { signerName: 'alt' })
-      expect(acc).toBeInstanceOf(WalletAccountBtc)
-      expect(acc.path).toBe("m/84'/1'/1'/2/3")
+      wallet.dispose()
+
+      // The consumer still owns the signer, so it must remain fully usable.
+      await expect(root.derive("0'/0/0")).resolves.toBeInstanceOf(SeedSignerBtc)
+
+      root.dispose()
     })
 
-    test('getAccountByPath caches per signerName:path (same instance on repeat)', async () => {
-      const acc1 = await wallet.getAccountByPath("0'/0/7")
-      const acc2 = await wallet.getAccountByPath("0'/0/7")
-      expect(acc2).toBe(acc1)
+    test('should not dispose signers registered via addSigner', () => {
+      const named = new SeedSignerBtc(SEED_PHRASE)
+      wallet.addSigner('seed', named)
+
+      wallet.dispose()
+
+      expect(named.keyPair.privateKey).not.toBeNull()
+
+      named.dispose()
     })
 
-    test('getAccountByPath does not collide across signer names with same path', async () => {
-      const altSigner = new SeedSignerBtc(SEED_PHRASE)
-      wallet.addSigner('alt', altSigner)
+    test('should not close externally provided clients', () => {
+      const externalClient = { connect: jest.fn(), close: jest.fn() }
+      const wallet = new WalletManagerBtc(SEED_PHRASE, { client: externalClient })
 
-      const accDefault = await wallet.getAccountByPath("0'/0/5")
-      const accAlt = await wallet.getAccountByPath("0'/0/5", { signerName: 'alt' })
+      wallet.dispose()
 
-      expect(accDefault).toBeInstanceOf(WalletAccountBtc)
-      expect(accAlt).toBeInstanceOf(WalletAccountBtc)
-      expect(accAlt).not.toBe(accDefault)
-
-      expect(accDefault.path).toBe("m/84'/1'/0'/0/5")
-      expect(accAlt.path).toBe("m/84'/1'/0'/0/5")
+      expect(externalClient.close).not.toHaveBeenCalled()
     })
 
-    test('getAccountByPath throws for unknown signerName', async () => {
-      await expect(wallet.getAccountByPath("0'/0/0", { signerName: 'ghost' }))
-        .rejects.toThrow(/No signer found with name/)
-    })
-  })
+    test('should be safe to call dispose more than once', () => {
+      const wallet = new WalletManagerBtc(SEED_PHRASE)
 
-  describe('getAccount overloads & guards', () => {
-    test('constructor rejects a non-derivable default signer', () => {
-      const pk = new PrivateKeySignerBtc(PRIVATE_KEY, { network: 'regtest' })
-      expect(() => new WalletManagerBtc(pk)).toThrow(/must be derivable/)
-      pk.dispose()
-    })
+      wallet.dispose()
 
-    test('should throw if the default signer is a bare ISigner without isDerivable', () => {
-      const bareSigner = { derive: async () => {}, signTransaction: async () => {}, getAddress: async () => '', dispose: () => {} }
-
-      expect(() => new WalletManagerBtc(bareSigner)) // eslint-disable-line no-new
-        .toThrow(/must be derivable/)
-    })
-
-    test('getAccount(name) derives a detached child for a derivable named signer', async () => {
-      const altSigner = new SeedSignerBtc(SEED_PHRASE)
-      wallet.addSigner('alt', altSigner)
-
-      const acc = await wallet.getAccount('alt')
-      expect(acc).toBeInstanceOf(WalletAccountBtc)
-      // Defaults to the "0'/0/0" relative path when the signer has no path of its own.
-      expect(acc.path).toBe("m/84'/1'/0'/0/0")
-      // Cached per name#self.
-      expect(await wallet.getAccount('alt')).toBe(acc)
-    })
-
-    test('getAccount(name) returns a non-derivable signer directly', async () => {
-      const pk = new PrivateKeySignerBtc(PRIVATE_KEY, { network: 'regtest' })
-      wallet.addSigner('pk', pk)
-
-      const acc = await wallet.getAccount('pk')
-      expect(acc).toBeInstanceOf(WalletAccountBtc)
-      expect(await acc.getAddress()).toBe(pk.address)
-    })
-
-    test('getAccount(index, { signerName }) derives via the named signer', async () => {
-      const altSigner = new SeedSignerBtc(SEED_PHRASE)
-      wallet.addSigner('alt', altSigner)
-
-      const acc = await wallet.getAccount(2, { signerName: 'alt' })
-      expect(acc.path).toBe("m/84'/1'/0'/0/2")
-    })
-  })
-
-  describe('backwards compatibility (seed string constructor)', () => {
-    let seedWallet
-
-    beforeEach(() => {
-      seedWallet = new WalletManagerBtc(SEED_PHRASE)
-    })
-
-    afterEach(() => {
-      seedWallet.dispose()
-    })
-
-    test('accepts a mnemonic string directly', () => {
-      expect(seedWallet).toBeInstanceOf(WalletManagerBtc)
-    })
-
-    test('getAccount returns the same path as signer-based construction', async () => {
-      const signerAccount = await wallet.getAccount()
-      const seedAccount = await seedWallet.getAccount()
-
-      expect(seedAccount).toBeInstanceOf(WalletAccountBtc)
-      expect(seedAccount.path).toBe(signerAccount.path)
-    })
-
-    test('getAccountByPath works with seed-constructed wallet', async () => {
-      const account = await seedWallet.getAccountByPath("1'/2/3")
-
-      expect(account).toBeInstanceOf(WalletAccountBtc)
-      expect(account.path).toBe("m/84'/1'/1'/2/3")
-    })
-
-    test('derived accounts produce the same address as signer-based flow', async () => {
-      const signerAccount = await wallet.getAccount(0)
-      const seedAccount = await seedWallet.getAccount(0)
-
-      const signerAddr = await signerAccount.getAddress()
-      const seedAddr = await seedAccount.getAddress()
-      expect(seedAddr).toBe(signerAddr)
+      expect(() => wallet.dispose()).not.toThrow()
     })
   })
 })

@@ -11,9 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-'use strict'
+/**
+ * Barrel exports for Bitcoin signers.
+ *
+ * - `ISignerBtc`: the interface implemented by all Bitcoin signers.
+ * - `SeedSignerBtc`: derives accounts from a BIP-39 seed (BIP-44/84 path).
+ * - `PrivateKeySignerBtc`: wrapper around a raw private key.
+ */
 
-/** @typedef {import('./seed-signer-btc.js').ISignerBtc} ISignerBtc */
-
+export { ISignerBtc } from './signer-btc.js'
 export { default, default as SeedSignerBtc } from './seed-signer-btc.js'
 export { default as PrivateKeySignerBtc } from './private-key-signer-btc.js'

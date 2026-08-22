@@ -276,7 +276,7 @@ export type BtcElectrumClientDescriptor = {
      */
     clientConfig: Omit<MempoolElectrumConfig, "network">;
 };
-export type BtcSignerConfig = import("./signers/seed-signer-btc.js").BtcSignerConfig;
+export type BtcSignerConfig = import("./signers/signer-btc.js").BtcSignerConfig;
 export type BtcAccountConfig = {
     /**
      * - The bitcoin client, or a list of bitcoin client options for connection fallback.

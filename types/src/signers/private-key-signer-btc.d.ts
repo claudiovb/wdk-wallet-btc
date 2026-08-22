@@ -1,66 +1,42 @@
-/** @typedef {import('./seed-signer-btc.js').BtcSignerConfig} BtcSignerConfig */
-/** @typedef {import('@tetherto/wdk-wallet').KeyPair} KeyPair */
 /**
  * Signer backed by a single raw private key (non-HD).
  *
- * Does not support HD derivation, extended keys, or master fingerprint.
- * Signs messages and PSBTs directly using the leaf key.
+ * Does not support HD derivation or extended keys. Signs messages and PSBTs directly using
+ * the leaf key.
  *
- * @extends {ISignerBtc}
+ * @implements {ISignerBtc}
  */
-export default class PrivateKeySignerBtc extends ISignerBtc {
+export default class PrivateKeySignerBtc implements ISignerBtc {
     /**
      * Creates a new private key signer.
      *
      * @param {string | Uint8Array | Buffer} privateKey - The raw private key (hex string or 32 bytes).
      * @param {BtcSignerConfig} [config] - The signer configuration.
+     * @throws {ValueError} If the private key is not 32 bytes.
+     * @throws {ValueError} If an unsupported BIP is specified.
      */
     constructor(privateKey: string | Uint8Array | Buffer, config?: BtcSignerConfig);
-    /**
-     * @private
-     * @type {BtcSignerConfig}
-     */
-    private _config: BtcSignerConfig;
+    /** @private */
+    private _config;
+    /** @private */
+    private _network;
     /** @private */
     private _account;
     /** @private */
     private _address;
     /**
-     * Whether this signer can derive child signers. Always false for private-key signers.
+     * Whether this signer can derive child signers. Always false: a private-key signer is a
+     * single standalone account and is bound directly to a wallet account.
      *
      * @type {boolean}
      */
     get isDerivable(): boolean;
     /**
-     * The account index. Always undefined for private-key signers.
+     * The derivation path. Always null for private-key signers.
      *
-     * @type {number | undefined}
+     * @type {string | null}
      */
-    get index(): number | undefined;
-    /**
-     * The derivation path. Always undefined for private-key signers.
-     *
-     * @type {string | undefined}
-     */
-    get path(): string | undefined;
-    /**
-     * The account's key pair (public and private keys).
-     *
-     * @type {KeyPair}
-     */
-    get keyPair(): KeyPair;
-    /**
-     * The signer configuration.
-     *
-     * @type {BtcSignerConfig}
-     */
-    get config(): BtcSignerConfig;
-    /**
-     * The BIP standard of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
-     *
-     * @type {number}
-     */
-    get bip(): number;
+    get path(): string | null;
     /**
      * The account's Bitcoin address.
      *
@@ -68,21 +44,41 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
      */
     get address(): string;
     /**
-     * Returns the account's derived address.
-     * @returns {Promise<string>}
+     * The name of the network the signer's addresses are encoded for.
+     *
+     * @type {"bitcoin" | "regtest" | "testnet"}
      */
-    getAddress(): Promise<string>;
+    get network(): "bitcoin" | "regtest" | "testnet";
     /**
-     * Not supported for private key signers.
+     * The BIP address type of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
+     *
+     * @type {44 | 84}
+     */
+    get bip(): 44 | 84;
+    /**
+     * The account's key pair (public and private keys).
+     *
+     * @type {KeyPair}
+     */
+    get keyPair(): KeyPair;
+    /**
+     * PrivateKeySignerBtc is not a hierarchical signer and cannot derive.
      *
      * @returns {Promise<never>}
      * @throws {InvalidSignerError} Always — private-key signers do not support derivation.
      */
     derive(): Promise<never>;
     /**
-     * Not available for private key signers.
+     * Returns the account's derived address.
      *
-     * @throws {InvalidSignerError} Always throws since extended keys require HD derivation.
+     * @returns {Promise<string>} The account's address.
+     */
+    getAddress(): Promise<string>;
+    /**
+     * PrivateKeySignerBtc is not a hierarchical signer and has no extended keys.
+     *
+     * @returns {Promise<never>}
+     * @throws {InvalidSignerError} Always — extended keys require HD derivation.
      */
     getExtendedPublicKey(): Promise<never>;
     /**
@@ -104,7 +100,9 @@ export default class PrivateKeySignerBtc extends ISignerBtc {
      */
     dispose(): void;
 }
-export type BtcSignerConfig = import("./seed-signer-btc.js").BtcSignerConfig;
+export type ISignerBtc = import("./signer-btc.js").ISignerBtc;
+export type BtcSignerConfig = import("./signer-btc.js").BtcSignerConfig;
 export type KeyPair = import("@tetherto/wdk-wallet").KeyPair;
-import { ISignerBtc } from './seed-signer-btc.js';
-import { Psbt } from 'bitcoinjs-lib';
+export type InvalidSignerError = import("@tetherto/wdk-wallet").InvalidSignerError;
+export type ValueError = import("@tetherto/wdk-wallet").ValueError;
+export type Psbt = import("bitcoinjs-lib").Psbt;

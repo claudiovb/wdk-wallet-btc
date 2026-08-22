@@ -53,8 +53,9 @@ import { SeedSignerBtc } from "@tetherto/wdk-wallet-btc/signers";
 const seedPhrase =
   "test only example nut use this real life secret phrase must random";
 
-// Create seed signer
-const seedSigner = new SeedSignerBtc(seedPhrase);
+// Create a root seed signer at the purpose/coin-type level, so the wallet
+// manager can derive accounts below it (e.g. m/84'/0'/0'/0/0)
+const seedSigner = new SeedSignerBtc(seedPhrase, "m/84'/0'", { network: "bitcoin" });
 
 // Create wallet manager with signer and Electrum server config
 const wallet = new WalletManagerBtc(seedSigner, {
@@ -103,30 +104,31 @@ const readOnlyAccount = await account.toReadOnlyAccount();
 
 #### Using Private Key Signer (Non-HD Wallets)
 
+Private-key signers are not derivable, so they cannot be the wallet manager's default signer. Register them by name via `addSigner`, or create a standalone account with `WalletAccountBtc.fromPrivateKey`.
+
 ```javascript
-import WalletManagerBtc from "@tetherto/wdk-wallet-btc";
+import { WalletAccountBtc } from "@tetherto/wdk-wallet-btc";
 import { PrivateKeySignerBtc } from "@tetherto/wdk-wallet-btc/signers";
 
 // Use a raw private key (hex format)
 const privateKey =
   "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789ab";
 
-// Create private key signer
+// Option 1: register the signer by name on an existing wallet manager
 const pkSigner = new PrivateKeySignerBtc(privateKey);
+wallet.addSigner("my-key", pkSigner);
+const account = await wallet.getAccount("my-key");
+const address = await account.getAddress();
+console.log("Account address:", address);
 
-// Create wallet manager with signer
-const wallet = new WalletManagerBtc(pkSigner, {
+// Option 2: standalone account (no manager)
+const standalone = WalletAccountBtc.fromPrivateKey(privateKey, {
   client: {
     type: "electrum",
     clientConfig: { host: "electrum.blockstream.info", port: 50001 },
   },
   network: "bitcoin", // 'bitcoin', 'testnet', or 'regtest'
 });
-
-// Get account (no derivation for private key signers)
-const account = await wallet.getAccount(0);
-const address = await account.getAddress();
-console.log("Account address:", address);
 ```
 
 #### Single Account (no manager): Seed + path
@@ -287,6 +289,8 @@ account.dispose();
 wallet.dispose();
 ```
 
+**Ownership semantics**: accounts and managers only wipe signers they own. A manager created from a seed phrase wipes the signer it built internally; a manager created from a signer you constructed never wipes it — you remain responsible for calling `signer.dispose()` yourself. Likewise, accounts wipe the signer given at construction only when created with `{ shouldWipeSignerOnDisposal: true }` (set automatically for accounts the manager derives and for `WalletAccountBtc.fromPrivateKey`).
+
 ## 🔐 Signers
 
 The package supports multiple signer types for different use cases and security models:
@@ -296,14 +300,23 @@ The package supports multiple signer types for different use cases and security 
 **Best for**: Most users, backup/recovery, multiple accounts
 
 - Uses BIP-39 seed phrases for hierarchical deterministic (HD) wallets
-- Supports BIP-84 derivation paths for Native SegWit addresses
+- Supports BIP-44 (legacy) and BIP-84 (Native SegWit) derivation paths
 - Allows creating multiple accounts from a single seed phrase
 - Provides strong security through HD derivation
 
+Each signer holds exactly one HD node at its `path`, and `derive(relPath)` returns a child signer relative to that node. Construct a signer with an intermediate path (e.g. `"m/84'/0'"`) when you need a root that can derive accounts below it — for example, as a wallet manager's default signer.
+
 ```javascript
+// Leaf signer at the default first account (m/84'/0'/0'/0/0 on mainnet)
 const seedSigner = new SeedSignerBtc("your seed phrase here", {
   network: "bitcoin",
 });
+
+// Root signer at the purpose/coin-type level, able to derive accounts below it
+const rootSigner = new SeedSignerBtc("your seed phrase here", "m/84'/0'", {
+  network: "bitcoin",
+});
+const child = await rootSigner.derive("0'/0/1"); // signer at m/84'/0'/0'/0/1
 ```
 
 ### PrivateKeySignerBtc (Non-HD Wallets)
@@ -313,7 +326,7 @@ const seedSigner = new SeedSignerBtc("your seed phrase here", {
 - Uses raw private keys directly (no HD derivation)
 - Suitable for single addresses or imported keys
 - Cannot create multiple accounts from one key
-- Simpler but less flexible than HD wallets
+- Not derivable, so it cannot be a wallet manager's default signer — register it by name via `addSigner` or use `WalletAccountBtc.fromPrivateKey`
 
 ```javascript
 const pkSigner = new PrivateKeySignerBtc("a1b2c3d4e5f6789abcdef...", {
@@ -339,12 +352,12 @@ Extends `WalletManager` from `@tetherto/wdk-wallet`.
 #### Constructor
 
 ```javascript
-new WalletManagerBtc(signer, config);
+new WalletManagerBtc(seedOrSigner, config);
 ```
 
 **Parameters:**
 
-- `signer` (ISignerBtc): A signer instance (SeedSignerBtc or PrivateKeySignerBtc)
+- `seedOrSigner` (string | Uint8Array | ISigner): Either a BIP-39 seed phrase (or raw seed bytes), or a **derivable** signer to use as the default signer. Non-derivable signers (e.g. `PrivateKeySignerBtc`) throw an `InvalidSignerError` here — register them by name via `addSigner` instead
 - `config` (BtcWalletConfig, optional): Configuration object
   - `network` (string, optional): "bitcoin", "testnet", or "regtest" (default: "bitcoin")
   - `bip` (number, optional): BIP address type - 44 (legacy) or 84 (native SegWit) (default: 84)
@@ -353,12 +366,15 @@ new WalletManagerBtc(signer, config);
     - A descriptor `{ type, clientConfig }` where type is `'electrum'`, `'blockbook-http'`, or `'electrum-ws'`
     - An array of the above (for failover — tries each in order)
 
+When given a seed, the manager builds its default signer internally at the purpose/coin-type root (e.g. `m/84'/0'` for mainnet BIP-84) and wipes it on `dispose()`. When given a signer, the signer is used exactly as given — the manager never wipes a signer you supplied, and `wallet.seed` is `undefined`. To let the manager derive accounts correctly, a supplied default signer should sit at the purpose/coin-type root.
+
 **Example:**
 
 ```javascript
 import { SeedSignerBtc } from "@tetherto/wdk-wallet-btc/signers";
 
-const signer = new SeedSignerBtc(seedPhrase, { network: "bitcoin" });
+// From a signer rooted at the purpose/coin-type level
+const signer = new SeedSignerBtc(seedPhrase, "m/84'/0'", { network: "bitcoin" });
 const wallet = new WalletManagerBtc(signer, {
   client: {
     type: "electrum",
@@ -366,6 +382,9 @@ const wallet = new WalletManagerBtc(signer, {
   },
   network: "bitcoin",
 });
+
+// Or directly from a seed phrase
+const walletFromSeed = new WalletManagerBtc(seedPhrase, { network: "bitcoin" });
 ```
 
 #### Methods
@@ -380,7 +399,7 @@ const wallet = new WalletManagerBtc(signer, {
 
 ##### `getAccount(indexOrSignerName, options)`
 
-Returns a wallet account at the specified index using BIP-84 derivation, or — when passed a string — the account associated with a registered signer name.
+Returns a wallet account at the specified index using BIP derivation, or — when passed a string — the account associated with a registered signer name.
 
 **Parameters:**
 
@@ -390,6 +409,8 @@ Returns a wallet account at the specified index using BIP-84 derivation, or — 
 
 **Returns:** `Promise<WalletAccountBtc>` - The wallet account
 
+**Note on the signer-name overload**: `getAccount(signerName)` never derives — it wraps the registered signer exactly as given, wherever it happens to sit. For a private-key signer that's its one account; for a derivable signer it's the account at that signer's own current path, which is rarely what you want to transact with if the signer sits at an intermediate path. To get a derived leaf from a named derivable signer, use `getAccount(index, { signerName })` or `getAccountByPath(path, { signerName })` — both always derive. Disposing an account returned by the signer-name overload leaves the registered signer untouched.
+
 **Example:**
 
 ```javascript
@@ -397,6 +418,9 @@ Returns a wallet account at the specified index using BIP-84 derivation, or — 
 // For mainnet (bitcoin): m/84'/0'/0'/0/1
 // For testnet or regtest: m/84'/1'/0'/0/1
 const account = await wallet.getAccount(1);
+
+// Account wrapping a registered signer, as-is (no derivation)
+const pkAccount = await wallet.getAccount("my-key");
 ```
 
 ##### `getAccountByPath(path, options)`
@@ -460,7 +484,7 @@ const account = await wallet.getAccount("my-key");
 
 ##### `dispose()`
 
-Disposes all wallet accounts and clears sensitive data from memory.
+Disposes all wallet accounts, clears sensitive data from memory, and closes internally-created client connections (externally-provided clients are left open). The default signer is wiped only if the manager created it internally from a seed; caller-supplied default signers and signers registered via `addSigner` are never wiped.
 
 **Returns:** `void`
 
@@ -477,14 +501,27 @@ Represents an individual Bitcoin wallet account. Extends `WalletAccountReadOnlyB
 #### Constructor
 
 ```javascript
-new WalletAccountBtc(signer);
+new WalletAccountBtc(seed, path, config);
+// or
+new WalletAccountBtc(signer, config);
 ```
 
-**Parameters:**
+**Parameters (seed overload):**
 
 - `seed` (string | Uint8Array): BIP-39 mnemonic seed phrase or seed bytes
-- `path` (string): Derivation path suffix (e.g., "0'/0/0")
+- `path` (string): Derivation path relative to the BIP root (e.g., "0'/0/0")
 - `config` (BtcWalletConfig, optional): Configuration object (see [WalletManagerBtc constructor](#constructor) for details)
+
+**Parameters (signer overload):**
+
+- `signer` (ISignerBtc): The signer backing the account. The network and BIP are taken from the signer
+- `config` (BtcAccountConfig & SignerOptions, optional): Configuration object. `shouldWipeSignerOnDisposal` (boolean, optional) makes `dispose()` wipe the given signer too — by default a caller-supplied signer is never wiped
+
+There is also a static factory for raw private keys:
+
+```javascript
+const account = WalletAccountBtc.fromPrivateKey(privateKey, config);
+```
 
 #### Methods
 
@@ -689,7 +726,7 @@ const balance = await readOnlyAccount.getBalance();
 
 ##### `dispose()`
 
-Disposes the wallet account, securely erasing the private key from memory and closing the Electrum connection.
+Disposes the wallet account, securely erasing the private key from memory and closing internally-created client connections. The signer given at construction is wiped only if the account owns it (i.e. it was created via the seed overload or `fromPrivateKey`, or `shouldWipeSignerOnDisposal` was set); a caller-supplied signer is never wiped.
 
 **Returns:** `void`
 
@@ -704,11 +741,10 @@ account.dispose();
 
 #### Properties
 
-| Property  | Type     | Description                                         |
-| --------- | -------- | --------------------------------------------------- |
-| `index`   | `number` | The derivation path's index of this account         |
-| `path`    | `string` | The full derivation path of this account            |
-| `keyPair` | `object` | The account's key pair (⚠️ Contains sensitive data) |
+| Property  | Type              | Description                                                                                                       |
+| --------- | ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `path`    | `string \| null`  | The full derivation path of this account, or null if the account's signer is not bound to a derivation position (e.g. private-key signers) |
+| `keyPair` | `KeyPair \| null` | The account's key pair (⚠️ Contains sensitive data), or null after disposal or for signers that can't expose keys |
 
 ⚠️ **Security Note**: The `keyPair` property contains sensitive cryptographic material. Never log, display, or expose the private key.
 
@@ -736,45 +772,59 @@ new WalletAccountReadOnlyBtc(address, config);
 
 ### SeedSignerBtc
 
-HD wallet signer using BIP-39 seed phrases for hierarchical deterministic wallets.
+HD wallet signer using BIP-39 seed phrases for hierarchical deterministic wallets. Each signer holds exactly one HD node at its `path`; `derive` returns child signers relative to that node.
 
 #### Constructor
 
 ```javascript
-new SeedSignerBtc(seed, config);
+new SeedSignerBtc(seed, path, config);
 ```
 
 **Parameters:**
 
 - `seed` (string | Uint8Array): BIP-39 mnemonic seed phrase or seed bytes
-- `config` (BtcWalletConfig, optional): Configuration object (see [WalletManagerBtc constructor](#constructor) for details)
+- `path` (string, optional): The absolute derivation path of the signer's node (default: the first account for the configured BIP, e.g. `m/84'/0'/0'/0/0` on mainnet). The path is not required to match the configured BIP purpose
+- `config` (BtcSignerConfig, optional): Signer configuration
+  - `network` (string, optional): "bitcoin", "testnet", or "regtest" (default: "bitcoin")
+  - `bip` (number, optional): 44 (legacy) or 84 (native SegWit) (default: 84) — governs address encoding only
 
 **Example:**
 
 ```javascript
-const signer = new SeedSignerBtc(seedPhrase, config);
+// Leaf signer at the default first account
+const signer = new SeedSignerBtc(seedPhrase, { network: "bitcoin" });
+
+// Root signer that can derive accounts below it
+const root = new SeedSignerBtc(seedPhrase, "m/84'/0'", { network: "bitcoin" });
+```
+
+There is also a static factory for extended private keys — the imported node becomes the signer's root, at path `"m"`:
+
+```javascript
+const signer = SeedSignerBtc.fromXprv(xprv, config);
 ```
 
 #### Methods
 
-| Method                       | Description                                           | Returns            |
-| ---------------------------- | ----------------------------------------------------- | ------------------ |
-| `derive(relPath, config?)`   | Derives a child signer at the specified relative path | `SeedSignerBtc`    |
-| `sign(message)`              | Signs a message using the private key                 | `Promise<string>`  |
-| `verify(message, signature)` | Verifies a message signature                          | `Promise<boolean>` |
-| `signPsbt(psbt)`             | Signs a PSBT (Partially Signed Bitcoin Transaction)   | `Promise<Psbt>`    |
-| `getExtendedPublicKey()`     | Returns the extended public key (xpub)                | `Promise<string>`  |
-| `getWalletAddress()`         | Returns the wallet address for this signer            | `Promise<string>`  |
-| `dispose()`                  | Clears private keys from memory                       | `void`             |
+| Method                   | Description                                                      | Returns                  |
+| ------------------------ | ---------------------------------------------------------------- | ------------------------ |
+| `derive(relPath)`        | Derives a child signer at the given path relative to this signer | `Promise<SeedSignerBtc>` |
+| `getAddress()`           | Returns the signer's address                                     | `Promise<string>`        |
+| `sign(message)`          | Signs a message using the private key (BIP-137)                  | `Promise<string>`        |
+| `signPsbt(psbt)`         | Signs a PSBT and returns the signed PSBT in base64 format        | `Promise<string>`        |
+| `getExtendedPublicKey()` | Returns the extended public key (xpub) of the signer's node      | `Promise<string>`        |
+| `dispose()`              | Clears private keys from memory                                  | `void`                   |
 
 #### Properties
 
-| Property  | Type      | Description                                        |
-| --------- | --------- | -------------------------------------------------- |
-| `path`    | `string`  | The derivation path of this signer                 |
-| `address` | `string`  | The signer's address                               |
-| `keyPair` | `object`  | The signer's key pair (⚠️ Contains sensitive data) |
-| `isRoot`  | `boolean` | Whether this is a root signer                      |
+| Property       | Type              | Description                                                        |
+| -------------- | ----------------- | ------------------------------------------------------------------ |
+| `path`         | `string`          | The absolute derivation path of this signer's node                 |
+| `address`      | `string`          | The signer's address                                               |
+| `network`      | `string`          | The configured network ("bitcoin", "testnet", or "regtest")        |
+| `bip`          | `number`          | The configured BIP address type (44 or 84)                         |
+| `keyPair`      | `KeyPair \| null` | The signer's key pair (⚠️ Contains sensitive data); nulls after disposal |
+| `isDerivable`  | `boolean`         | Always true — every seed signer can derive children                |
 
 ### PrivateKeySignerBtc
 
@@ -789,7 +839,7 @@ new PrivateKeySignerBtc(privateKey, config);
 **Parameters:**
 
 - `privateKey` (string | Uint8Array | Buffer): Raw private key (hex string or 32 bytes)
-- `config` (BtcWalletConfig, optional): Configuration object (see [WalletManagerBtc constructor](#constructor) for details)
+- `config` (BtcSignerConfig, optional): Signer configuration (`network` and `bip`, see [SeedSignerBtc constructor](#constructor-2))
 
 **Example:**
 
@@ -799,21 +849,25 @@ const signer = new PrivateKeySignerBtc("a1b2c3d4e5f6789abcdef...", config);
 
 #### Methods
 
-| Method                       | Description                                         | Returns            |
-| ---------------------------- | --------------------------------------------------- | ------------------ |
-| `sign(message)`              | Signs a message using the private key               | `Promise<string>`  |
-| `verify(message, signature)` | Verifies a message signature                        | `Promise<boolean>` |
-| `signPsbt(psbt)`             | Signs a PSBT (Partially Signed Bitcoin Transaction) | `Promise<Psbt>`    |
-| `getWalletAddress()`         | Returns the wallet address for this signer          | `Promise<string>`  |
-| `dispose()`                  | Clears private keys from memory                     | `void`             |
+| Method                   | Description                                                       | Returns           |
+| ------------------------ | ----------------------------------------------------------------- | ----------------- |
+| `getAddress()`           | Returns the signer's address                                      | `Promise<string>` |
+| `sign(message)`          | Signs a message using the private key (BIP-137)                   | `Promise<string>` |
+| `signPsbt(psbt)`         | Signs a PSBT and returns the signed PSBT in base64 format         | `Promise<string>` |
+| `derive()`               | Not supported — always throws an `InvalidSignerError`             | `Promise<never>`  |
+| `getExtendedPublicKey()` | Not supported — always throws an `InvalidSignerError`             | `Promise<never>`  |
+| `dispose()`              | Clears private keys from memory                                   | `void`            |
 
 #### Properties
 
-| Property       | Type      | Description                                        |
-| -------------- | --------- | -------------------------------------------------- |
-| `address`      | `string`  | The signer's address                               |
-| `keyPair`      | `object`  | The signer's key pair (⚠️ Contains sensitive data) |
-| `isPrivateKey` | `boolean` | Always true for private key signers                |
+| Property      | Type              | Description                                                        |
+| ------------- | ----------------- | ------------------------------------------------------------------ |
+| `path`        | `null`            | Always null — the signer is not bound to a derivation position     |
+| `address`     | `string`          | The signer's address                                               |
+| `network`     | `string`          | The configured network ("bitcoin", "testnet", or "regtest")        |
+| `bip`         | `number`          | The configured BIP address type (44 or 84)                         |
+| `keyPair`     | `KeyPair \| null` | The signer's key pair (⚠️ Contains sensitive data); nulls after disposal |
+| `isDerivable` | `boolean`         | Always false — private-key signers cannot derive child accounts    |
 
 ## 🌐 Supported Networks
 

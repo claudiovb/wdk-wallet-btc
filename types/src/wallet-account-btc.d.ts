@@ -21,30 +21,31 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      * Creates a new bitcoin wallet account using a signer.
      *
      * @param {ISignerBtc} signer - The signer.
-     * @param {BtcAccountConfig} [config] - The configuration object. The network and BIP are taken from the signer.
+     * @param {BtcAccountConfig & SignerOptions} [config] - The configuration object. The network and BIP are taken from the signer.
      */
-    constructor(signer: ISignerBtc, config?: BtcAccountConfig);
+    constructor(signer: ISignerBtc, config?: BtcAccountConfig & SignerOptions);
+    /**
+     * If true, disposes the signer on calls to the 'dispose' method.
+     *
+     * @protected
+     * @type {boolean}
+     */
+    protected _shouldWipeSignerOnDisposal: boolean;
     /** @private */
     private _signer;
     /**
-     * Returns the account's address. If not set at construction time (e.g. lazy hardware signers),
-     * it asks the underlying signer to resolve it, then caches it locally.
+     * Returns the account's address.
      *
      * @returns {Promise<string>} The account's address.
      */
     getAddress(): Promise<string>;
     /**
-     * The derivation path's index of this account.
+     * The derivation path of this account, or null if the account's signer is not bound to a
+     * derivation position (e.g. private-key signers).
      *
-     * @type {number}
+     * @type {string | null}
      */
-    get index(): number;
-    /**
-     * The derivation path of this account.
-     *
-     * @type {string}
-     */
-    get path(): string;
+    get path(): string | null;
     /**
      * The account's key pair.
      *
@@ -52,9 +53,9 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      * it's strongly recommended to treat the key pair as a read-only view of the keys. While it's still technically possible to alter their
      * content, client code should never do so.
      *
-     * @type {KeyPair}
+     * @type {KeyPair | null}
      */
-    get keyPair(): KeyPair;
+    get keyPair(): KeyPair | null;
     /**
      * Signs a message.
      *
@@ -114,6 +115,11 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      */
     toReadOnlyAccount(): Promise<WalletAccountReadOnlyBtc>;
     _btcReadOnlyAccount: WalletAccountReadOnlyBtc;
+    /**
+     * Disposes the wallet account, erasing the private key from memory and closing the connection with the server.
+     * The signer given at construction is wiped only if the account owns it (see {@link SignerOptions}).
+     */
+    dispose(): void;
     /** @private */
     private _getSignedTransactionFee;
     /** @private */
@@ -129,7 +135,13 @@ export type TransferResult = import("@tetherto/wdk-wallet").TransferResult;
 export type BtcTransaction = import("./wallet-account-read-only-btc.js").BtcTransaction;
 export type BtcWalletConfig = import("./wallet-account-read-only-btc.js").BtcWalletConfig;
 export type BtcAccountConfig = import("./wallet-account-read-only-btc.js").BtcAccountConfig;
-export type ISignerBtc = import("./signers/seed-signer-btc.js").ISignerBtc;
+export type ISignerBtc = import("./signers/signer-btc.js").ISignerBtc;
+export type SignerOptions = {
+    /**
+     * - If true, wipes the signer given at construction on calls to the 'dispose' method.
+     */
+    shouldWipeSignerOnDisposal?: boolean;
+};
 export type BtcTransfer = {
     /**
      * - The transaction's id.
