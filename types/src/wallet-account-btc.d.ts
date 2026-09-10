@@ -15,6 +15,8 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase or seed bytes.
      * @param {string} path - The derivation path relative to the BIP root (e.g. "0'/0/0").
      * @param {BtcWalletConfig} [config] - The configuration object.
+     * @throws {ValueError} If the seed is a string but not a valid BIP-39 mnemonic.
+     * @throws {ValueError} If the configured bip is not supported.
      */
     constructor(seed: string | Uint8Array, path: string, config?: BtcWalletConfig);
     /**
@@ -68,7 +70,9 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      *
      * @param {BtcTransaction} tx - The transaction to sign.
      * @returns {Promise<string>} The signed raw transaction as a hex string.
-     * @throws {Error} If the transaction's cost exceeds the maximum transaction fee option.
+     * @throws {MaximumFeeExceededError} If the transaction's cost exceeds the maximum transaction fee option.
+     * @throws {ValueError} If the amount doesn't clear the dust limit, or the spend requires more inputs than allowed.
+     * @throws {TransactionError} If the account has no unspent outputs, or its balance doesn't cover the amount and its fees.
      */
     signTransaction({ to, value, feeRate, confirmationTarget }: BtcTransaction): Promise<string>;
     /**
@@ -76,6 +80,8 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      *
      * @param {BtcTransaction | string} tx - The transaction, or a signed raw transaction as a hex string.
      * @returns {Promise<Omit<TransactionResult, 'hash'>>} The transaction's quotes.
+     * @throws {ValueError} If the amount doesn't clear the dust limit, or the spend requires more inputs than allowed.
+     * @throws {TransactionError} If the account has no unspent outputs, or its balance doesn't cover the amount and its fees.
      */
     quoteSendTransaction(tx: BtcTransaction | string): Promise<Omit<TransactionResult, "hash">>;
     /**
@@ -84,14 +90,19 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      * @param {BtcTransaction | string} tx - The transaction, or a signed raw transaction as a hex string.
      * @param {number} [timeoutMs] - Maximum milliseconds to poll for spent inputs to disappear from unspent outputs after broadcast.
      * @returns {Promise<TransactionResult>} The transaction's result.
-     * @throws {Error} If the transaction's cost exceeds the maximum transaction fee option.
+     * @throws {MaximumFeeExceededError} If the transaction's cost exceeds the maximum transaction fee option.
+     * @throws {ValueError} If the amount doesn't clear the dust limit, or the spend requires more inputs than allowed.
+     * @throws {TransactionError} If the account has no unspent outputs, or its balance doesn't cover the amount and its fees.
      */
     sendTransaction(tx: BtcTransaction | string, timeoutMs?: number): Promise<TransactionResult>;
     /**
      * Transfers a token to another address.
      *
+     * Not supported on bitcoin: the blockchain has no tokens to transfer.
+     *
      * @param {TransferOptions} options - The transfer's options.
      * @returns {Promise<TransferResult>} The transfer's result.
+     * @throws {UnsupportedOperationError} Always — the bitcoin blockchain doesn't support transfers.
      */
     transfer(options: TransferOptions): Promise<TransferResult>;
     /**

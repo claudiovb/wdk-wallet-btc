@@ -16,6 +16,8 @@
 import { address as btcAddress, Psbt, Transaction } from 'bitcoinjs-lib'
 import pLimit from 'p-limit'
 import { LRUCache } from 'lru-cache'
+import { AssertionError, MaximumFeeExceededError, UnsupportedOperationError, ValueError } from '@tetherto/wdk-wallet'
+
 import PrivateKeySignerBtc from './signers/private-key-signer-btc.js'
 import SeedSignerBtc, { getBtcDerivationPathPrefix } from './signers/seed-signer-btc.js'
 import WalletAccountReadOnlyBtc from './wallet-account-read-only-btc.js'
@@ -66,6 +68,8 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase or seed bytes.
    * @param {string} path - The derivation path relative to the BIP root (e.g. "0'/0/0").
    * @param {BtcWalletConfig} [config] - The configuration object.
+   * @throws {ValueError} If the seed is a string but not a valid BIP-39 mnemonic.
+   * @throws {ValueError} If the configured bip is not supported.
    */
 
   /**
@@ -163,13 +167,15 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    *
    * @param {BtcTransaction} tx - The transaction to sign.
    * @returns {Promise<string>} The signed raw transaction as a hex string.
-   * @throws {Error} If the transaction's cost exceeds the maximum transaction fee option.
+   * @throws {MaximumFeeExceededError} If the transaction's cost exceeds the maximum transaction fee option.
+   * @throws {ValueError} If the amount doesn't clear the dust limit, or the spend requires more inputs than allowed.
+   * @throws {TransactionError} If the account has no unspent outputs, or its balance doesn't cover the amount and its fees.
    */
   async signTransaction ({ to, value, feeRate, confirmationTarget = 1 }) {
     const { tx } = await this._buildSignedTransaction({ to, value, feeRate, confirmationTarget })
 
     if (this._config.transactionMaxFee !== undefined && tx.fee > this._config.transactionMaxFee) {
-      throw new Error('Exceeded maximum fee cost for transaction operation.')
+      throw new MaximumFeeExceededError('Exceeded maximum fee cost for transaction operation.')
     }
 
     return tx.hex
@@ -180,6 +186,8 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    *
    * @param {BtcTransaction | string} tx - The transaction, or a signed raw transaction as a hex string.
    * @returns {Promise<Omit<TransactionResult, 'hash'>>} The transaction's quotes.
+   * @throws {ValueError} If the amount doesn't clear the dust limit, or the spend requires more inputs than allowed.
+   * @throws {TransactionError} If the account has no unspent outputs, or its balance doesn't cover the amount and its fees.
    */
   async quoteSendTransaction (tx) {
     if (typeof tx === 'string') {
@@ -200,7 +208,9 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    * @param {BtcTransaction | string} tx - The transaction, or a signed raw transaction as a hex string.
    * @param {number} [timeoutMs] - Maximum milliseconds to poll for spent inputs to disappear from unspent outputs after broadcast.
    * @returns {Promise<TransactionResult>} The transaction's result.
-   * @throws {Error} If the transaction's cost exceeds the maximum transaction fee option.
+   * @throws {MaximumFeeExceededError} If the transaction's cost exceeds the maximum transaction fee option.
+   * @throws {ValueError} If the amount doesn't clear the dust limit, or the spend requires more inputs than allowed.
+   * @throws {TransactionError} If the account has no unspent outputs, or its balance doesn't cover the amount and its fees.
    */
   async sendTransaction (tx, timeoutMs = 10000) {
     await this._ensureConnected()
@@ -227,7 +237,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
     }
 
     if (this._config.transactionMaxFee !== undefined && fee > this._config.transactionMaxFee) {
-      throw new Error('Exceeded maximum fee cost for transaction operation.')
+      throw new MaximumFeeExceededError('Exceeded maximum fee cost for transaction operation.')
     }
 
     const address = await this.getAddress()
@@ -253,11 +263,14 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
   /**
    * Transfers a token to another address.
    *
+   * Not supported on bitcoin: the blockchain has no tokens to transfer.
+   *
    * @param {TransferOptions} options - The transfer's options.
    * @returns {Promise<TransferResult>} The transfer's result.
+   * @throws {UnsupportedOperationError} Always — the bitcoin blockchain doesn't support transfers.
    */
   async transfer (options) {
-    throw new Error("The 'transfer' method is not supported on the bitcoin blockchain.")
+    throw new UnsupportedOperationError('transfer(options)')
   }
 
   /**
@@ -541,7 +554,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
     } else {
       const newRecipientAmnt = currentRecipientAmnt - delta
       if (newRecipientAmnt <= dustLimit) {
-        throw new Error(`The amount after fees must be bigger than the dust limit (= ${dustLimit}).`)
+        throw new ValueError(`The amount after fees must be bigger than the dust limit (= ${dustLimit}).`)
       }
       currentRecipientAmnt = newRecipientAmnt
       unsigned = await buildUnsignedPsbt(currentRecipientAmnt, currentChange)
@@ -550,7 +563,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
 
     vsize = tx.virtualSize()
     requiredFee = BigInt(vsize) * feeRate
-    if (requiredFee > fee) throw new Error('Fee shortfall after output rebalance.')
+    if (requiredFee > fee) throw new AssertionError('Fee shortfall after output rebalance.')
 
     return { txid: tx.getId(), hex: tx.toHex(), fee, vsize }
   }

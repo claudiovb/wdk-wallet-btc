@@ -57,8 +57,11 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
     /**
      * Returns the account balance for a specific token.
      *
+     * Not supported on bitcoin: the blockchain has no token accounts.
+     *
      * @param {string} tokenAddress - The smart contract address of the token.
      * @returns {Promise<bigint>} The token balance (in base unit).
+     * @throws {UnsupportedOperationError} Always — the bitcoin blockchain doesn't support tokens.
      */
     getTokenBalance(tokenAddress: string): Promise<bigint>;
     /**
@@ -66,13 +69,18 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
      *
      * @param {BtcTransaction} tx - The transaction.
      * @returns {Promise<Omit<TransactionResult, 'hash'>>} The transaction's quotes.
+     * @throws {ValueError} If the amount doesn't clear the dust limit, or the spend requires more inputs than allowed.
+     * @throws {TransactionError} If the account has no unspent outputs, or its balance doesn't cover the amount and its fees.
      */
     quoteSendTransaction({ to, value, feeRate, confirmationTarget }: BtcTransaction): Promise<Omit<TransactionResult, "hash">>;
     /**
      * Quotes the costs of a transfer operation.
      *
+     * Not supported on bitcoin: the blockchain has no token transfers to quote.
+     *
      * @param {TransferOptions} options - The transfer's options.
      * @returns {Promise<Omit<TransferResult, 'hash'>>} The transfer's quotes.
+     * @throws {UnsupportedOperationError} Always — the bitcoin blockchain doesn't support transfers.
      */
     quoteTransfer(options: TransferOptions): Promise<Omit<TransferResult, "hash">>;
     /**
@@ -81,6 +89,7 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
      * @deprecated Use {@link getTransaction} instead, which returns a normalized, finality-based receipt. The raw bitcoinjs transaction remains available on its `transaction` property.
      * @param {string} hash - The transaction's hash.
      * @returns {Promise<BtcTransactionReceipt | null>} – The receipt, or null if the transaction has not been included in a block yet.
+     * @throws {ValueError} If the hash is not a valid transaction hash.
      */
     getTransactionReceipt(hash: string): Promise<BtcTransactionReceipt | null>;
     /**
@@ -177,6 +186,8 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
      * @param {number | bigint} tx.amount - The amount to send (in satoshis).
      * @param {number | bigint} tx.feeRate - The fee rate (in sats/vB).
      * @returns {Promise<{ utxos: OutputWithValue[], fee: bigint, changeValue: bigint }>} - The funding plan.
+     * @throws {ValueError} If the amount doesn't clear the dust limit, or the spend requires more inputs than allowed.
+     * @throws {TransactionError} If the account has no unspent outputs, or its balance doesn't cover the amount and its fees.
      */
     protected _planSpend({ fromAddress, toAddress, amount, feeRate }: {
         fromAddress: string;
