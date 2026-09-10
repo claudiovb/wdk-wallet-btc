@@ -3,6 +3,8 @@ import { describe, expect, test } from '@jest/globals'
 import * as bip39 from 'bip39'
 import { Psbt, networks, address as btcAddress } from 'bitcoinjs-lib'
 
+import { InvalidSignerError, ValueError } from '@tetherto/wdk-wallet'
+
 import SeedSignerBtc from '../../src/signers/seed-signer-btc.js'
 
 const VALID_SEED_PHRASE = 'cook voyage document eight skate token alien guide drink uncle term abuse'
@@ -119,12 +121,9 @@ describe('SeedSignerBtc', () => {
 
     test('should throw if the seed phrase is invalid', () => {
       expect(() => new SeedSignerBtc('invalid seed phrase'))
+        .toThrow(ValueError)
+      expect(() => new SeedSignerBtc('invalid seed phrase'))
         .toThrow('The seed phrase is invalid.')
-    })
-
-    test('should throw if no seed is given', () => {
-      expect(() => new SeedSignerBtc())
-        .toThrow('Seed is required.')
     })
 
     test('should throw if the path is invalid', () => {
@@ -133,6 +132,8 @@ describe('SeedSignerBtc', () => {
     })
 
     test('should throw for unsupported bip specifications', () => {
+      expect(() => new SeedSignerBtc(VALID_SEED_PHRASE, undefined, { bip: 1 }))
+        .toThrow(ValueError)
       expect(() => new SeedSignerBtc(VALID_SEED_PHRASE, undefined, { bip: 1 }))
         .toThrow('Invalid bip specification. Supported bips: 44, 84.')
     })
@@ -253,7 +254,10 @@ describe('SeedSignerBtc', () => {
 
       signer.dispose()
 
-      await expect(signer.derive("0'/0/0")).rejects.toThrow('Cannot derive: the signer has been disposed.')
+      const promise = signer.derive("0'/0/0")
+
+      await expect(promise).rejects.toThrow(InvalidSignerError)
+      await expect(promise).rejects.toThrow('Cannot derive: the signer has been disposed.')
     })
   })
 
@@ -331,7 +335,8 @@ describe('SeedSignerBtc', () => {
       signer.dispose()
 
       expect(signer.keyPair.privateKey).toBeNull()
-      expect(signer.keyPair.publicKey).toBeNull()
+      expect(Buffer.from(signer.keyPair.publicKey).toString('hex')).toBe(DEFAULT_PUBLIC_KEY)
+      expect(signer.path).toBe(DEFAULT_PATH)
       expect(signer.address).toBe(DEFAULT_ADDRESS)
     })
 

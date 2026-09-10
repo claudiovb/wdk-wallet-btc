@@ -2,6 +2,7 @@
  * Returns the relative BIP derivation path prefix (purpose'/coin_type') for the given signer
  * configuration.
  *
+ * @internal
  * @param {BtcSignerConfig} [config] - The signer configuration.
  * @returns {string} The derivation path prefix (e.g. "84'/0'").
  * @throws {ValueError} If an unsupported BIP is specified.
@@ -16,8 +17,6 @@ export function getBtcDerivationPathPrefix(config?: BtcSignerConfig): string;
  * @implements {ISignerBtc}
  */
 export default class SeedSignerBtc implements ISignerBtc {
-    /** @private */
-    private static _normalizeSeed;
     /** @private */
     private static _init;
     /**
@@ -34,10 +33,9 @@ export default class SeedSignerBtc implements ISignerBtc {
      * Creates a SeedSignerBtc from a BIP-39 seed.
      *
      * @param {string | Buffer} seed - BIP-39 mnemonic or seed bytes.
-     * @param {string} [path] - Absolute BIP-32 path (e.g. "m/84'/0'/0'/0/0"). Defaults to the first account for the configured BIP and network.
+     * @param {string} [path] - A BIP-32 path (default: the first account for the configured BIP and network, e.g. "m/84'/0'/0'/0/0").
      * @param {BtcSignerConfig} [config] - The signer configuration.
-     * @throws {ValueError} If no seed is provided.
-     * @throws {ValueError} If a seed is provided but is not a valid BIP-39 mnemonic.
+     * @throws {ValueError} If the given seed phrase is invalid.
      * @throws {ValueError} If an unsupported BIP is specified.
      */
     constructor(seed: string | Buffer, path?: string, config?: BtcSignerConfig);
@@ -50,14 +48,16 @@ export default class SeedSignerBtc implements ISignerBtc {
     /** @private */
     private _path;
     /** @private */
+    private _publicKey;
+    /** @private */
     private _address;
     /**
      * Whether this signer can derive child signers. Always true: every seed signer holds an
      * HD node with a private key and can derive below its own path.
      *
-     * @type {boolean}
+     * @type {true}
      */
-    get isDerivable(): boolean;
+    get isDerivable(): true;
     /**
      * The signer's absolute derivation path.
      *
@@ -67,6 +67,8 @@ export default class SeedSignerBtc implements ISignerBtc {
     /**
      * The account's Bitcoin address.
      *
+     * @deprecated Use {@link getAddress} instead. This property will be removed in an upcoming
+     * release: not all signers (e.g. hardware signers) can expose the address synchronously.
      * @type {string}
      */
     get address(): string;

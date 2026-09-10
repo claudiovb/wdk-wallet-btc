@@ -7,6 +7,8 @@ export class ISignerBtc extends ISigner {
     /**
      * The account's address, if available.
      *
+     * @deprecated Use {@link getAddress} instead. This property will be removed in an upcoming
+     * release: not all signers (e.g. hardware signers) can expose the address synchronously.
      * @type {string | undefined}
      */
     get address(): string | undefined;
@@ -26,7 +28,7 @@ export class ISignerBtc extends ISigner {
      * Returns the extended public key (e.g. xpub/tpub).
      *
      * @returns {Promise<string>} The extended public key in base58 format.
-     * @throws {InvalidSignerError} If the signer does not support extended keys.
+     * @throws {UnsupportedOperationError} If the signer does not support extended keys.
      */
     getExtendedPublicKey(): Promise<string>;
     /**
@@ -51,5 +53,5 @@ export type BtcSignerConfig = {
     bip?: 44 | 84;
 };
 export type Psbt = import("bitcoinjs-lib").Psbt;
-export type InvalidSignerError = import("@tetherto/wdk-wallet").InvalidSignerError;
+export type UnsupportedOperationError = import("@tetherto/wdk-wallet").UnsupportedOperationError;
 import { ISigner } from "@tetherto/wdk-wallet";

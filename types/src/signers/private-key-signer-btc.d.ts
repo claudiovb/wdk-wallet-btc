@@ -23,14 +23,15 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
     /** @private */
     private _account;
     /** @private */
+    private _publicKey;
+    /** @private */
     private _address;
     /**
-     * Whether this signer can derive child signers. Always false: a private-key signer is a
-     * single standalone account and is bound directly to a wallet account.
+     * Whether this signer can derive child signers.
      *
-     * @type {boolean}
+     * @type {false}
      */
-    get isDerivable(): boolean;
+    get isDerivable(): false;
     /**
      * The derivation path. Always null for private-key signers.
      *
@@ -40,6 +41,8 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
     /**
      * The account's Bitcoin address.
      *
+     * @deprecated Use {@link getAddress} instead. This property will be removed in an upcoming
+     * release: not all signers (e.g. hardware signers) can expose the address synchronously.
      * @type {string}
      */
     get address(): string;
@@ -62,12 +65,14 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
      */
     get keyPair(): KeyPair;
     /**
-     * PrivateKeySignerBtc is not a hierarchical signer and cannot derive.
+     * Derives a child signer using a relative path (e.g. "0'/0/0").
      *
-     * @returns {Promise<never>}
-     * @throws {InvalidSignerError} Always — private-key signers do not support derivation.
+     * @param {string} path - The relative derivation path.
+     * @returns {Promise<never>} The derived signer.
+     * @throws {UnsupportedOperationError} If the signer does not support account derivation.
+     * @throws {ValueError} If the path is not valid.
      */
-    derive(): Promise<never>;
+    derive(path: string): Promise<never>;
     /**
      * Returns the account's derived address.
      *
@@ -75,10 +80,10 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
      */
     getAddress(): Promise<string>;
     /**
-     * PrivateKeySignerBtc is not a hierarchical signer and has no extended keys.
+     * Returns the extended public key (e.g. xpub/tpub).
      *
-     * @returns {Promise<never>}
-     * @throws {InvalidSignerError} Always — extended keys require HD derivation.
+     * @returns {Promise<never>} The extended public key in base58 format.
+     * @throws {UnsupportedOperationError} If the signer does not support extended keys.
      */
     getExtendedPublicKey(): Promise<never>;
     /**
@@ -103,6 +108,6 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
 export type ISignerBtc = import("./signer-btc.js").ISignerBtc;
 export type BtcSignerConfig = import("./signer-btc.js").BtcSignerConfig;
 export type KeyPair = import("@tetherto/wdk-wallet").KeyPair;
-export type InvalidSignerError = import("@tetherto/wdk-wallet").InvalidSignerError;
+export type UnsupportedOperationError = import("@tetherto/wdk-wallet").UnsupportedOperationError;
 export type ValueError = import("@tetherto/wdk-wallet").ValueError;
 export type Psbt = import("bitcoinjs-lib").Psbt;

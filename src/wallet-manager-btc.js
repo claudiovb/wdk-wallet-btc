@@ -220,7 +220,7 @@ export default class WalletManagerBtc extends WalletManager {
       }
     }
 
-    if (this._shouldWipeDefaultSignerOnDisposal && this._defaultSigner) {
+    if (this._shouldWipeDefaultSignerOnDisposal) {
       this._defaultSigner.dispose()
     }
 

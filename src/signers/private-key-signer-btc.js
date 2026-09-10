@@ -16,7 +16,7 @@
 
 import { networks, Psbt } from 'bitcoinjs-lib'
 import { ECPair } from '@bitcoinerlab/descriptors'
-import { InvalidSignerError, ValueError } from '@tetherto/wdk-wallet'
+import { UnsupportedOperationError, ValueError } from '@tetherto/wdk-wallet'
 
 // eslint-disable-next-line camelcase
 import { sodium_memzero } from 'sodium-universal'
@@ -72,14 +72,15 @@ export default class PrivateKeySignerBtc {
     /** @private */
     this._account = account
     /** @private */
+    this._publicKey = account.publicKey
+    /** @private */
     this._address = getAddressFromPublicKey(account.publicKey, network, config.bip)
   }
 
   /**
-   * Whether this signer can derive child signers. Always false: a private-key signer is a
-   * single standalone account and is bound directly to a wallet account.
+   * Whether this signer can derive child signers.
    *
-   * @type {boolean}
+   * @type {false}
    */
   get isDerivable () {
     return false
@@ -97,6 +98,8 @@ export default class PrivateKeySignerBtc {
   /**
    * The account's Bitcoin address.
    *
+   * @deprecated Use {@link getAddress} instead. This property will be removed in an upcoming
+   * release: not all signers (e.g. hardware signers) can expose the address synchronously.
    * @type {string}
    */
   get address () {
@@ -129,18 +132,20 @@ export default class PrivateKeySignerBtc {
   get keyPair () {
     return {
       privateKey: this._account ? this._account.privateKey : null,
-      publicKey: this._account ? this._account.publicKey : null
+      publicKey: this._publicKey
     }
   }
 
   /**
-   * PrivateKeySignerBtc is not a hierarchical signer and cannot derive.
+   * Derives a child signer using a relative path (e.g. "0'/0/0").
    *
-   * @returns {Promise<never>}
-   * @throws {InvalidSignerError} Always — private-key signers do not support derivation.
+   * @param {string} path - The relative derivation path.
+   * @returns {Promise<never>} The derived signer.
+   * @throws {UnsupportedOperationError} If the signer does not support account derivation.
+   * @throws {ValueError} If the path is not valid.
    */
-  async derive () {
-    throw new InvalidSignerError('PrivateKeySignerBtc does not support derivation.')
+  async derive (path) {
+    throw new UnsupportedOperationError('derive(path)')
   }
 
   /**
@@ -153,13 +158,13 @@ export default class PrivateKeySignerBtc {
   }
 
   /**
-   * PrivateKeySignerBtc is not a hierarchical signer and has no extended keys.
+   * Returns the extended public key (e.g. xpub/tpub).
    *
-   * @returns {Promise<never>}
-   * @throws {InvalidSignerError} Always — extended keys require HD derivation.
+   * @returns {Promise<never>} The extended public key in base58 format.
+   * @throws {UnsupportedOperationError} If the signer does not support extended keys.
    */
   async getExtendedPublicKey () {
-    throw new InvalidSignerError('Extended public key is unavailable for private-key imported signers.')
+    throw new UnsupportedOperationError('getExtendedPublicKey()')
   }
 
   /**

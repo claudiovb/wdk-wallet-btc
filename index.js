@@ -30,6 +30,7 @@
 /** @typedef {import('./src/wallet-account-read-only-btc.js').BtcWalletConfig} BtcWalletConfig */
 /** @typedef {import('./src/wallet-account-read-only-btc.js').BtcMaxSpendableResult} BtcMaxSpendableResult */
 /** @typedef {import('./src/wallet-account-btc.js').BtcTransfer} BtcTransfer */
+/** @typedef {import('./src/wallet-account-btc.js').SignerOptions} SignerOptions */
 
 /** @typedef {import('./src/transports/index.js').BtcClientConfig} BtcClientConfig */
 /** @typedef {import('./src/transports/index.js').BtcBalance} BtcBalance */

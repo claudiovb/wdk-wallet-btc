@@ -55,6 +55,7 @@ initEccLib(ecc)
  * Returns the relative BIP derivation path prefix (purpose'/coin_type') for the given signer
  * configuration.
  *
+ * @internal
  * @param {BtcSignerConfig} [config] - The signer configuration.
  * @returns {string} The derivation path prefix (e.g. "84'/0'").
  * @throws {ValueError} If an unsupported BIP is specified.
@@ -105,22 +106,25 @@ export default class SeedSignerBtc {
    * Creates a SeedSignerBtc from a BIP-39 seed.
    *
    * @param {string | Buffer} seed - BIP-39 mnemonic or seed bytes.
-   * @param {string} [path] - Absolute BIP-32 path (e.g. "m/84'/0'/0'/0/0"). Defaults to the first account for the configured BIP and network.
+   * @param {string} [path] - A BIP-32 path (default: the first account for the configured BIP and network, e.g. "m/84'/0'/0'/0/0").
    * @param {BtcSignerConfig} [config] - The signer configuration.
-   * @throws {ValueError} If no seed is provided.
-   * @throws {ValueError} If a seed is provided but is not a valid BIP-39 mnemonic.
+   * @throws {ValueError} If the given seed phrase is invalid.
    * @throws {ValueError} If an unsupported BIP is specified.
    */
   constructor (seed, path, config = {}) {
-    if (!seed) {
-      throw new ValueError('Seed is required.')
+    if (typeof seed === 'string') {
+      if (!bip39.validateMnemonic(seed)) {
+        throw new ValueError('The seed phrase is invalid.')
+      }
+
+      seed = bip39.mnemonicToSeedSync(seed)
     }
 
     config = normalizeConfig(config)
     path = path ?? `m/${getBtcDerivationPathPrefix(config)}/0'/0/0`
 
     const network = networks[config.network] || networks.bitcoin
-    const root = deriveMasterNode(SeedSignerBtc._normalizeSeed(seed), network)
+    const root = deriveMasterNode(seed, network)
     // derivePath rejects the bare "m" path; the root itself is the account in that case. Scrub
     // the master key whenever the signer sits below it, so no signer keeps the root alive.
     const account = path === 'm' ? root : root.derivePath(path)
@@ -153,7 +157,7 @@ export default class SeedSignerBtc {
    * Whether this signer can derive child signers. Always true: every seed signer holds an
    * HD node with a private key and can derive below its own path.
    *
-   * @type {boolean}
+   * @type {true}
    */
   get isDerivable () {
     return true
@@ -171,6 +175,8 @@ export default class SeedSignerBtc {
   /**
    * The account's Bitcoin address.
    *
+   * @deprecated Use {@link getAddress} instead. This property will be removed in an upcoming
+   * release: not all signers (e.g. hardware signers) can expose the address synchronously.
    * @type {string}
    */
   get address () {
@@ -203,7 +209,7 @@ export default class SeedSignerBtc {
   get keyPair () {
     return {
       privateKey: this._account ? this._account.privateKey : null,
-      publicKey: this._account ? this._account.publicKey : null
+      publicKey: this._publicKey
     }
   }
 
@@ -275,20 +281,12 @@ export default class SeedSignerBtc {
   }
 
   /** @private */
-  static _normalizeSeed (seed) {
-    if (typeof seed !== 'string') return seed
-    if (!bip39.validateMnemonic(seed)) {
-      throw new ValueError('The seed phrase is invalid.')
-    }
-    return bip39.mnemonicToSeedSync(seed)
-  }
-
-  /** @private */
   static _init (signer, account, config, path) {
     signer._config = config
     signer._network = networks[config.network] || networks.bitcoin
     signer._account = account
     signer._path = path
+    signer._publicKey = account.publicKey
     signer._address = getAddressFromPublicKey(account.publicKey, signer._network, config.bip)
   }
 }

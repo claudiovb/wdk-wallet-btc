@@ -4,6 +4,8 @@ import { HOST, PORT, ELECTRUM_PORT, ZMQ_PORT, DATA_DIR } from './config.js'
 
 import { BitcoinCli, Waiter } from './helpers/index.js'
 
+import { InvalidSignerError, NoSuchElementError, UnsupportedOperationError } from '@tetherto/wdk-wallet'
+
 import WalletManagerBtc, { WalletAccountBtc } from '../index.js'
 import SeedSignerBtc, { PrivateKeySignerBtc } from '../src/signers/index.js'
 
@@ -35,6 +37,8 @@ describe('WalletManagerBtc', () => {
       const pk = new PrivateKeySignerBtc(PRIVATE_KEY)
 
       expect(() => new WalletManagerBtc(pk)) // eslint-disable-line no-new
+        .toThrow(InvalidSignerError)
+      expect(() => new WalletManagerBtc(pk)) // eslint-disable-line no-new
         .toThrow(NON_DERIVABLE_SIGNER_MESSAGE)
 
       pk.dispose()
@@ -43,6 +47,8 @@ describe('WalletManagerBtc', () => {
     test('should throw if the default signer is a bare ISigner without isDerivable', () => {
       const bareSigner = { derive: async () => {}, signPsbt: async () => {}, getAddress: async () => '', dispose: () => {} }
 
+      expect(() => new WalletManagerBtc(bareSigner)) // eslint-disable-line no-new
+        .toThrow(InvalidSignerError)
       expect(() => new WalletManagerBtc(bareSigner)) // eslint-disable-line no-new
         .toThrow(NON_DERIVABLE_SIGNER_MESSAGE)
     })
@@ -87,8 +93,10 @@ describe('WalletManagerBtc', () => {
     })
 
     test('should throw if the named signer does not exist', async () => {
-      await expect(wallet.getAccount(0, { signerName: 'missing' }))
-        .rejects.toThrow('No signer found with name "missing".')
+      const promise = wallet.getAccount(0, { signerName: 'missing' })
+
+      await expect(promise).rejects.toThrow(NoSuchElementError)
+      await expect(promise).rejects.toThrow('No signer found with name "missing".')
     })
 
     test('should return the account of a named private key signer (string overload)', async () => {
@@ -101,8 +109,10 @@ describe('WalletManagerBtc', () => {
     })
 
     test('should throw if the named signer does not exist (string overload)', async () => {
-      await expect(wallet.getAccount('missing'))
-        .rejects.toThrow('No signer found with name "missing".')
+      const promise = wallet.getAccount('missing')
+
+      await expect(promise).rejects.toThrow(NoSuchElementError)
+      await expect(promise).rejects.toThrow('No signer found with name "missing".')
     })
 
     test('should use the named signer as given without taking ownership of it', async () => {
@@ -174,8 +184,10 @@ describe('WalletManagerBtc', () => {
     test('should throw when deriving from a named private key signer', async () => {
       wallet.addSigner('hot', new PrivateKeySignerBtc(PRIVATE_KEY))
 
-      await expect(wallet.getAccountByPath("0'/0/0", { signerName: 'hot' }))
-        .rejects.toThrow('PrivateKeySignerBtc does not support derivation.')
+      const promise = wallet.getAccountByPath("0'/0/0", { signerName: 'hot' })
+
+      await expect(promise).rejects.toThrow(UnsupportedOperationError)
+      await expect(promise).rejects.toThrow("Method 'derive(path)' is not supported.")
     })
 
     test('should propagate the wallet configuration to derived accounts', async () => {

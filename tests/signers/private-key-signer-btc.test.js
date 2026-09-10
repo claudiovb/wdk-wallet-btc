@@ -2,6 +2,8 @@ import { describe, expect, test } from '@jest/globals'
 
 import { Psbt, networks, address as btcAddress } from 'bitcoinjs-lib'
 
+import { UnsupportedOperationError, ValueError } from '@tetherto/wdk-wallet'
+
 import PrivateKeySignerBtc from '../../src/signers/private-key-signer-btc.js'
 
 const VALID_PRIVATE_KEY = '15e083525dac99a2a9bba8f14a6eed9704a77c5994b1a9b4d7271ebd353b7966'
@@ -86,15 +88,21 @@ describe('PrivateKeySignerBtc', () => {
 
     test('should throw if the private key is too short', () => {
       expect(() => new PrivateKeySignerBtc('aabb'))
+        .toThrow(ValueError)
+      expect(() => new PrivateKeySignerBtc('aabb'))
         .toThrow('The private key must be 32 bytes.')
     })
 
     test('should throw if the private key is too long', () => {
       expect(() => new PrivateKeySignerBtc('ff'.repeat(33)))
+        .toThrow(ValueError)
+      expect(() => new PrivateKeySignerBtc('ff'.repeat(33)))
         .toThrow('The private key must be 32 bytes.')
     })
 
     test('should throw for unsupported bip specifications', () => {
+      expect(() => new PrivateKeySignerBtc(VALID_PRIVATE_KEY, { bip: 1 }))
+        .toThrow(ValueError)
       expect(() => new PrivateKeySignerBtc(VALID_PRIVATE_KEY, { bip: 1 }))
         .toThrow('Invalid bip specification. Supported bips: 44, 84.')
     })
@@ -115,7 +123,10 @@ describe('PrivateKeySignerBtc', () => {
     test('should throw when calling derive', async () => {
       const signer = new PrivateKeySignerBtc(VALID_PRIVATE_KEY)
 
-      await expect(signer.derive()).rejects.toThrow('PrivateKeySignerBtc does not support derivation.')
+      const promise = signer.derive("0'/0/0")
+
+      await expect(promise).rejects.toThrow(UnsupportedOperationError)
+      await expect(promise).rejects.toThrow("Method 'derive(path)' is not supported.")
 
       signer.dispose()
     })
@@ -137,7 +148,10 @@ describe('PrivateKeySignerBtc', () => {
     test('should throw when requesting an extended public key', async () => {
       const signer = new PrivateKeySignerBtc(VALID_PRIVATE_KEY)
 
-      await expect(signer.getExtendedPublicKey()).rejects.toThrow('Extended public key is unavailable for private-key imported signers.')
+      const promise = signer.getExtendedPublicKey()
+
+      await expect(promise).rejects.toThrow(UnsupportedOperationError)
+      await expect(promise).rejects.toThrow("Method 'getExtendedPublicKey()' is not supported.")
 
       signer.dispose()
     })
@@ -181,7 +195,7 @@ describe('PrivateKeySignerBtc', () => {
       signer.dispose()
 
       expect(signer.keyPair.privateKey).toBeNull()
-      expect(signer.keyPair.publicKey).toBeNull()
+      expect(Buffer.from(signer.keyPair.publicKey).toString('hex')).toBe(EXPECTED_PUBLIC_KEY)
     })
 
     test('should be safe to call dispose more than once', () => {

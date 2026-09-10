@@ -854,8 +854,8 @@ const signer = new PrivateKeySignerBtc("a1b2c3d4e5f6789abcdef...", config);
 | `getAddress()`           | Returns the signer's address                                      | `Promise<string>` |
 | `sign(message)`          | Signs a message using the private key (BIP-137)                   | `Promise<string>` |
 | `signPsbt(psbt)`         | Signs a PSBT and returns the signed PSBT in base64 format         | `Promise<string>` |
-| `derive()`               | Not supported — always throws an `InvalidSignerError`             | `Promise<never>`  |
-| `getExtendedPublicKey()` | Not supported — always throws an `InvalidSignerError`             | `Promise<never>`  |
+| `derive(path)`           | Not supported — always throws an `UnsupportedOperationError`      | `Promise<never>`  |
+| `getExtendedPublicKey()` | Not supported — always throws an `UnsupportedOperationError`      | `Promise<never>`  |
 | `dispose()`              | Clears private keys from memory                                   | `void`            |
 
 #### Properties
