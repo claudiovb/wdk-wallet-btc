@@ -17,6 +17,8 @@ import { NotImplementedError } from '@tetherto/wdk-wallet'
 import { address as btcAddress, crypto } from 'bitcoinjs-lib'
 import { toHex } from 'uint8array-tools'
 
+/** @typedef {import('@tetherto/wdk-wallet').ProviderError} ProviderError */
+
 /**
  * @typedef {Object} BtcClientConfig
  * @property {number} [timeout] - Connection timeout in milliseconds (default: 15_000).
@@ -105,6 +107,15 @@ export default class IBtcClient {
   }
 
   /**
+   * Returns the height of the current best block.
+   *
+   * @returns {Promise<number>} The current block height.
+   */
+  async getBlockHeight () {
+    throw new NotImplementedError('getBlockHeight()')
+  }
+
+  /**
    * Returns a raw transaction.
    *
    * @param {string} txHash - The transaction hash.
@@ -131,7 +142,7 @@ export default class IBtcClient {
    *
    * @param {number} blocks - The confirmation target in blocks.
    * @returns {Promise<number>} Fee rate in BTC/kB.
-   * @throws {Error} If fee estimation is unavailable.
+   * @throws {ProviderError} If fee estimation is unavailable.
    */
   async estimateFee (blocks) {
     throw new NotImplementedError('estimateFee(blocks)')
