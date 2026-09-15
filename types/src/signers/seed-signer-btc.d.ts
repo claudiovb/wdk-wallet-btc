@@ -21,7 +21,7 @@ export default class SeedSignerBtc implements ISignerBtc {
     private static _init;
     /**
      * Creates a signer from an extended private key (xprv/tprv). The imported node is the
-     * signer's root, at path "m".
+     * signer's root, at path "/": a relative root whose prefix below the master key is unknown.
      *
      * @param {string} xprv - The extended private key in base58 format.
      * @param {BtcSignerConfig} [config] - The signer configuration.
@@ -32,13 +32,12 @@ export default class SeedSignerBtc implements ISignerBtc {
     /**
      * Creates a SeedSignerBtc from a BIP-39 seed.
      *
-     * @param {string | Buffer} seed - BIP-39 mnemonic or seed bytes.
+     * @param {string | Uint8Array} seed - BIP-39 mnemonic or seed bytes.
      * @param {string} [path] - A BIP-32 path (default: the first account for the configured BIP and network, e.g. "m/84'/0'/0'/0/0").
      * @param {BtcSignerConfig} [config] - The signer configuration.
-     * @throws {ValueError} If the given seed phrase is invalid.
-     * @throws {ValueError} If an unsupported BIP is specified.
+     * @throws {ValueError} If the given seed phrase is invalid, or an unsupported BIP is specified.
      */
-    constructor(seed: string | Buffer, path?: string, config?: BtcSignerConfig);
+    constructor(seed: string | Uint8Array, path?: string, config?: BtcSignerConfig);
     /** @private */
     private _config;
     /** @private */

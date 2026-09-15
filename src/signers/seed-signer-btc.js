@@ -103,14 +103,31 @@ function deriveMasterNode (seed, network = BITCOIN) {
  * @implements {ISignerBtc}
  */
 export default class SeedSignerBtc {
+  /** @private */
+  _config
+
+  /** @private */
+  _network
+
+  /** @private */
+  _account
+
+  /** @private */
+  _path
+
+  /** @private */
+  _publicKey
+
+  /** @private */
+  _address
+
   /**
    * Creates a SeedSignerBtc from a BIP-39 seed.
    *
-   * @param {string | Buffer} seed - BIP-39 mnemonic or seed bytes.
+   * @param {string | Uint8Array} seed - BIP-39 mnemonic or seed bytes.
    * @param {string} [path] - A BIP-32 path (default: the first account for the configured BIP and network, e.g. "m/84'/0'/0'/0/0").
    * @param {BtcSignerConfig} [config] - The signer configuration.
-   * @throws {ValueError} If the given seed phrase is invalid.
-   * @throws {ValueError} If an unsupported BIP is specified.
+   * @throws {ValueError} If the given seed phrase is invalid, or an unsupported BIP is specified.
    */
   constructor (seed, path, config = {}) {
     if (typeof seed === 'string') {
@@ -138,7 +155,7 @@ export default class SeedSignerBtc {
 
   /**
    * Creates a signer from an extended private key (xprv/tprv). The imported node is the
-   * signer's root, at path "m".
+   * signer's root, at path "/": a relative root whose prefix below the master key is unknown.
    *
    * @param {string} xprv - The extended private key in base58 format.
    * @param {BtcSignerConfig} [config] - The signer configuration.
@@ -150,7 +167,7 @@ export default class SeedSignerBtc {
     const network = networks[config.network] || networks.bitcoin
     const node = bip32.fromBase58(xprv, network)
     const signer = Object.create(SeedSignerBtc.prototype)
-    SeedSignerBtc._init(signer, node, config, 'm')
+    SeedSignerBtc._init(signer, node, config, '/')
     return signer
   }
 
@@ -223,7 +240,8 @@ export default class SeedSignerBtc {
    */
   async derive (relPath) {
     const signer = Object.create(SeedSignerBtc.prototype)
-    SeedSignerBtc._init(signer, this._account.derivePath(relPath), this._config, `${this._path}/${relPath}`)
+    const path = this._path === '/' ? `/${relPath}` : `${this._path}/${relPath}`
+    SeedSignerBtc._init(signer, this._account.derivePath(relPath), this._config, path)
     return signer
   }
 

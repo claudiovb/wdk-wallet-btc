@@ -3,11 +3,11 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
     /**
      * Creates a new bitcoin wallet account from a raw private key.
      *
-     * @param {string | Uint8Array | Buffer} privateKey - The raw private key (hex string or 32 bytes).
+     * @param {string | Uint8Array} privateKey - The raw private key (hex string or 32 bytes).
      * @param {BtcWalletConfig} [config] - The wallet configuration options.
      * @returns {WalletAccountBtc} The wallet account.
      */
-    static fromPrivateKey(privateKey: string | Uint8Array | Buffer, config?: BtcWalletConfig): WalletAccountBtc;
+    static fromPrivateKey(privateKey: string | Uint8Array, config?: BtcWalletConfig): WalletAccountBtc;
     /**
      * Creates a new bitcoin wallet account from a BIP-39 seed, deriving the account's key at the
      * given derivation path.

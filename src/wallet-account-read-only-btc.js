@@ -168,8 +168,6 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
      * @type {IBtcClient}
      */
     this._client = this._clientList[0]
-    let bip = null
-    let prefix = null
 
     if (this._clientList.length > 1) {
       const failoverProvider = new FailoverProvider({ retries: this._config.retries })
@@ -179,20 +177,23 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
       this._client = failoverProvider.initialize()
     }
 
-    if (address) {
-      prefix = Object.keys(BIP_BY_ADDRESS_PREFIX).find(p => address.startsWith(p))
-      bip = BIP_BY_ADDRESS_PREFIX[prefix] || 44
-    } else {
-      bip = config.bip
-    }
-
     /**
-     * The dust limit in satoshis based on the BIP type.
+     * The dust limit in satoshis based on the BIP type, cached after the first computation.
      *
      * @private
-     * @type {bigint}
+     * @type {bigint | undefined}
      */
-    this._dustLimit = DUST_LIMIT[bip]
+    this._dustLimit = undefined
+  }
+
+  /** @private */
+  async _getDustLimit () {
+    if (this._dustLimit === undefined) {
+      const address = await this.getAddress()
+      const prefix = Object.keys(BIP_BY_ADDRESS_PREFIX).find(p => address.startsWith(p))
+      this._dustLimit = DUST_LIMIT[BIP_BY_ADDRESS_PREFIX[prefix] || 44]
+    }
+    return this._dustLimit
   }
 
   /**
@@ -466,19 +467,21 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
 
     const twoOutputsVSize = txOverheadVBytes + (inputCount * inputVBytes) + (2 * outputVBytes)
     const twoOutputsFeeSats = Math.max(Math.ceil(twoOutputsVSize * feeRate), MIN_TX_FEE_SATS)
-    const twoOutputsRecipientAmountSats = totalInputValueSats - twoOutputsFeeSats - Number(this._dustLimit)
-    if (twoOutputsRecipientAmountSats > Number(this._dustLimit)) {
+    const dustLimit = await this._getDustLimit()
+
+    const twoOutputsRecipientAmountSats = totalInputValueSats - twoOutputsFeeSats - Number(dustLimit)
+    if (twoOutputsRecipientAmountSats > Number(dustLimit)) {
       return {
         amount: BigInt(twoOutputsRecipientAmountSats),
         fee: BigInt(twoOutputsFeeSats),
-        changeValue: this._dustLimit
+        changeValue: dustLimit
       }
     }
 
     const oneOutputVSize = txOverheadVBytes + (inputCount * inputVBytes) + outputVBytes
     const oneOutputFeeSats = Math.max(Math.ceil(oneOutputVSize * feeRate), MIN_TX_FEE_SATS)
     const oneOutputRecipientAmountSats = totalInputValueSats - oneOutputFeeSats
-    if (oneOutputRecipientAmountSats <= this._dustLimit) {
+    if (oneOutputRecipientAmountSats <= dustLimit) {
       return { amount: 0n, fee: 0n, changeValue: 0n }
     }
 
@@ -597,8 +600,10 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
     feeRate = this._toBigInt(feeRate)
     if (feeRate < 1n) feeRate = 1n
 
-    if (amount <= this._dustLimit) {
-      throw new ValueError(`The amount must be bigger than the dust limit (= ${this._dustLimit}).`)
+    const dustLimit = await this._getDustLimit()
+
+    if (amount <= dustLimit) {
+      throw new ValueError(`The amount must be bigger than the dust limit (= ${dustLimit}).`)
     }
 
     const network = this._network
@@ -657,7 +662,7 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
       })
     }
 
-    if (changeValue <= this._dustLimit) {
+    if (changeValue <= dustLimit) {
       return {
         utxos,
         fee: fee + changeValue,

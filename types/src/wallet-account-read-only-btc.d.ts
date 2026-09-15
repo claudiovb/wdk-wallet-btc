@@ -42,12 +42,14 @@ export default class WalletAccountReadOnlyBtc extends WalletAccountReadOnly {
      */
     get _isExternalClient(): Array<boolean>;
     /**
-     * The dust limit in satoshis based on the BIP type.
+     * The dust limit in satoshis based on the BIP type, cached after the first computation.
      *
      * @private
-     * @type {bigint}
+     * @type {bigint | undefined}
      */
-    private _dustLimit: bigint;
+    private _dustLimit: bigint | undefined;
+    /** @private */
+    private _getDustLimit;
     /**
      * Returns the account's bitcoin balance.
      *

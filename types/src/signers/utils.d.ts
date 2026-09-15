@@ -1,7 +1,3 @@
-/** @typedef {import('bitcoinjs-lib').Network} Network */
-/** @typedef {import('bitcoinjs-lib').Psbt} Psbt */
-/** @typedef {import('./signer-btc.js').BtcSignerConfig} BtcSignerConfig */
-/** @typedef {import('ecpair').ECPairInterface | import('bip32').BIP32Interface} SignerLike */
 /**
  * Signs every PSBT input owned by the given leaf key, in place.
  *
@@ -10,6 +6,7 @@
  * key via {@link Psbt#signInput}. Inputs that cannot be signed (finalized, missing data) are skipped.
  * The PSBT is not finalized, to support partially signed workflows.
  *
+ * @internal
  * @param {Psbt} psbtInstance - The PSBT instance to sign (mutated in place).
  * @param {SignerLike} account - A leaf signer exposing `publicKey` and a `sign` method (e.g. an ECPair or a BIP32 node).
  * @param {number} bip - The BIP standard (44 or 84).
@@ -20,6 +17,7 @@ export function signPsbtWithKey(psbtInstance: Psbt, account: SignerLike, bip: nu
 /**
  * Normalizes the signer configuration with defaults, keeping only the fields signers own.
  *
+ * @internal
  * @param {BtcSignerConfig} [config] - The configuration object.
  * @returns {BtcSignerConfig} The normalized configuration.
  * @throws {ValueError} If an unsupported BIP is specified.
@@ -28,6 +26,7 @@ export function normalizeConfig(config?: BtcSignerConfig): BtcSignerConfig;
 /**
  * Derives a Bitcoin address from a public key.
  *
+ * @internal
  * @param {Uint8Array} publicKey - The public key.
  * @param {Network} network - The network configuration.
  * @param {number} [bip] - The BIP standard (44 for P2PKH, 84 for P2WPKH) (default: 44).
@@ -37,6 +36,7 @@ export function getAddressFromPublicKey(publicKey: Uint8Array, network: Network,
 /**
  * Signs a message.
  *
+ * @internal
  * @param {string} message - The message to sign.
  * @param {Uint8Array} privateKey - The private key.
  * @param {number} bip - The BIP standard (44 or 84).

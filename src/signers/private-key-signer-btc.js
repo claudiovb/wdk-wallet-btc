@@ -41,31 +41,22 @@ export default class PrivateKeySignerBtc {
    *
    * @param {string | Uint8Array} privateKey - The raw private key (hex string or 32 bytes).
    * @param {BtcSignerConfig} [config] - The signer configuration.
-   * @throws {ValueError} If the private key is not 32 bytes.
-   * @throws {ValueError} If an unsupported BIP is specified.
+   * @throws {ValueError} If the private key is not 32 bytes, or an unsupported BIP is specified.
    */
   constructor (privateKey, config = {}) {
     config = normalizeConfig(config)
 
-    let pkBuf
-    if (typeof privateKey === 'string') {
-      pkBuf = Buffer.from(privateKey, 'hex')
-    } else if (Buffer.isBuffer(privateKey)) {
-      pkBuf = privateKey
-    } else {
-      // Wrap Uint8Array as a Buffer view over the same ArrayBuffer (zero-copy)
-      pkBuf = Buffer.from(privateKey.buffer, privateKey.byteOffset, privateKey.byteLength)
-    }
+    privateKey = typeof privateKey === 'string'
+      ? Buffer.from(privateKey, 'hex')
+      : Buffer.from(privateKey)
 
-    if (pkBuf.length !== 32) {
+    if (privateKey.length !== 32) {
       throw new ValueError('The private key must be 32 bytes.')
     }
+
     const network = networks[config.network] || networks.bitcoin
-    const account = ECPair.fromPrivateKey(pkBuf)
-    /**
-     * @private
-     * @type {BtcSignerConfig}
-     */
+    const account = ECPair.fromPrivateKey(privateKey)
+    /** @private */
     this._config = config
     /** @private */
     this._network = network

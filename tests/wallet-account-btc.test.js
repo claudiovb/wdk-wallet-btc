@@ -451,7 +451,7 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
       const nearMaxAmount = Math.max(1, Number(balance) - 2_000)
       const { fee: feeEstimate } = await account.quoteSendTransaction({ to: recipient, value: nearMaxAmount, feeRate: 1 })
 
-      const dustLimit = account._dustLimit
+      const dustLimit = bip === 44 ? 546n : 294n
       let spend = balance - feeEstimate - dustLimit + 1n
       if (spend < 1n) spend = 1n
 
@@ -517,7 +517,7 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
     })
 
     test('should throw if value is less than the dust limit', async () => {
-      const value = Math.floor(Number(account._dustLimit) / 2)
+      const value = Math.floor((bip === 44 ? 546 : 294) / 2)
 
       const promise = account.sendTransaction({ to: recipient, value, feeRate: 1 })
 
@@ -631,7 +631,7 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
       const master = bip32.fromPrivateKey(Buffer.from(privateKey), Buffer.from(chainCode), network)
       const xprv = master.toBase58()
 
-      // The imported node is the signer's root (path "m"), so derive the full account path.
+      // The imported node is the signer's root (path "/"), so derive the full account path.
       const root = SeedSignerBtc.fromXprv(xprv, SIGNER_CONFIG)
       const signer = await root.derive(`${bip}'/1'/0'/0/0`)
       const accountX = new WalletAccountBtc(signer, CLIENT_CONFIG)

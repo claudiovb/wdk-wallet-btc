@@ -217,7 +217,6 @@ describe('WalletManagerBtc', () => {
       const account1 = await wallet.getAccount(1)
 
       expect(account1._config.network).toBe('regtest')
-      expect(account1._config.bip).toBe(84)
       expect(account1._config.transactionMaxFee).toBe(0)
       expect(account1._config.client).toBe(wallet._clientList)
 

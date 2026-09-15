@@ -27,6 +27,7 @@ const bitcoinMessage = MessageFactory(ecc)
 /** @typedef {import('./signer-btc.js').BtcSignerConfig} BtcSignerConfig */
 /** @typedef {import('ecpair').ECPairInterface | import('bip32').BIP32Interface} SignerLike */
 /**
+  * @internal
   * @typedef {Object} InputOwnershipResult
   * @property {Object} input - The raw PSBT input data.
   * @property {{ script: Uint8Array, value: bigint } | null} prevOut - The previous output, or null if unavailable.
@@ -36,6 +37,7 @@ const bitcoinMessage = MessageFactory(ecc)
 /**
  * Builds a payment output script based on BIP standard.
  *
+ * @internal
  * @param {number} bip - The BIP standard (44 for P2PKH, 84 for P2WPKH).
  * @param {Uint8Array} pubkey - The public key.
  * @param {Network} network - The network configuration.
@@ -51,6 +53,7 @@ function buildPaymentScript (bip, pubkey, network) {
 /**
  * Detects whether a PSBT input belongs to the given script.
  *
+ * @internal
  * @param {Psbt} psbtInstance - The PSBT instance.
  * @param {number} i - The input index.
  * @param {Uint8Array} myScript - The script to match against.
@@ -80,6 +83,7 @@ function detectInputOwnership (psbtInstance, i, myScript) {
 /**
  * Adds witnessUtxo to a PSBT input if needed for BIP84 signing.
  *
+ * @internal
  * @param {Psbt} psbtInstance - The PSBT instance.
  * @param {number} i - The input index.
  * @param {number} bip - The BIP standard.
@@ -105,6 +109,7 @@ function ensureWitnessUtxoIfNeeded (psbtInstance, i, bip, prevOut, input) {
  * key via {@link Psbt#signInput}. Inputs that cannot be signed (finalized, missing data) are skipped.
  * The PSBT is not finalized, to support partially signed workflows.
  *
+ * @internal
  * @param {Psbt} psbtInstance - The PSBT instance to sign (mutated in place).
  * @param {SignerLike} account - A leaf signer exposing `publicKey` and a `sign` method (e.g. an ECPair or a BIP32 node).
  * @param {number} bip - The BIP standard (44 or 84).
@@ -137,6 +142,7 @@ export function signPsbtWithKey (psbtInstance, account, bip, network) {
 /**
  * Normalizes the signer configuration with defaults, keeping only the fields signers own.
  *
+ * @internal
  * @param {BtcSignerConfig} [config] - The configuration object.
  * @returns {BtcSignerConfig} The normalized configuration.
  * @throws {ValueError} If an unsupported BIP is specified.
@@ -152,6 +158,7 @@ export function normalizeConfig (config = {}) {
 /**
  * Derives a Bitcoin address from a public key.
  *
+ * @internal
  * @param {Uint8Array} publicKey - The public key.
  * @param {Network} network - The network configuration.
  * @param {number} [bip] - The BIP standard (44 for P2PKH, 84 for P2WPKH) (default: 44).
@@ -167,6 +174,7 @@ export function getAddressFromPublicKey (publicKey, network, bip = 44) {
 /**
  * Signs a message.
  *
+ * @internal
  * @param {string} message - The message to sign.
  * @param {Uint8Array} privateKey - The private key.
  * @param {number} bip - The BIP standard (44 or 84).

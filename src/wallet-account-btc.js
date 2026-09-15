@@ -141,7 +141,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
   /**
    * Creates a new bitcoin wallet account from a raw private key.
    *
-   * @param {string | Uint8Array | Buffer} privateKey - The raw private key (hex string or 32 bytes).
+   * @param {string | Uint8Array} privateKey - The raw private key (hex string or 32 bytes).
    * @param {BtcWalletConfig} [config] - The wallet configuration options.
    * @returns {WalletAccountBtc} The wallet account.
    */
@@ -540,7 +540,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
       return { txid: tx.getId(), hex: tx.toHex(), fee, vsize }
     }
 
-    const dustLimit = this._dustLimit
+    const dustLimit = await this._getDustLimit()
 
     const delta = requiredFee - fee
     fee = requiredFee

@@ -76,6 +76,17 @@ describe('PrivateKeySignerBtc', () => {
       signer.dispose()
     })
 
+    test('should own an independent copy of the private key', () => {
+      const keyBytes = new Uint8Array(Buffer.from(VALID_PRIVATE_KEY, 'hex'))
+      const signer = new PrivateKeySignerBtc(keyBytes)
+
+      keyBytes.fill(0)
+
+      expect(Buffer.from(signer.keyPair.privateKey).toString('hex')).toBe(VALID_PRIVATE_KEY)
+
+      signer.dispose()
+    })
+
     test('should default to a bip-84 mainnet configuration', () => {
       const signer = new PrivateKeySignerBtc(VALID_PRIVATE_KEY)
 
@@ -204,6 +215,15 @@ describe('PrivateKeySignerBtc', () => {
       signer.dispose()
 
       expect(() => signer.dispose()).not.toThrow()
+    })
+
+    test('should not wipe the caller-supplied key bytes on dispose', () => {
+      const keyBytes = new Uint8Array(Buffer.from(VALID_PRIVATE_KEY, 'hex'))
+      const signer = new PrivateKeySignerBtc(keyBytes)
+
+      signer.dispose()
+
+      expect(Buffer.from(keyBytes).toString('hex')).toBe(VALID_PRIVATE_KEY)
     })
   })
 })

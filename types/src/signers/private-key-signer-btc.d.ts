@@ -10,12 +10,11 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
     /**
      * Creates a new private key signer.
      *
-     * @param {string | Uint8Array | Buffer} privateKey - The raw private key (hex string or 32 bytes).
+     * @param {string | Uint8Array} privateKey - The raw private key (hex string or 32 bytes).
      * @param {BtcSignerConfig} [config] - The signer configuration.
-     * @throws {ValueError} If the private key is not 32 bytes.
-     * @throws {ValueError} If an unsupported BIP is specified.
+     * @throws {ValueError} If the private key is not 32 bytes, or an unsupported BIP is specified.
      */
-    constructor(privateKey: string | Uint8Array | Buffer, config?: BtcSignerConfig);
+    constructor(privateKey: string | Uint8Array, config?: BtcSignerConfig);
     /** @private */
     private _config;
     /** @private */

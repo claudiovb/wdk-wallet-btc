@@ -212,7 +212,6 @@ export default class WalletManagerBtc extends WalletManager {
 
   /**
    * Disposes all the wallet accounts, erasing their private keys from the memory and closing all internal connections.
-   * The default signer is wiped only if the manager created it internally from a seed.
    */
   dispose () {
     for (const [i, isExternal] of this._isExternalClient.entries()) {
