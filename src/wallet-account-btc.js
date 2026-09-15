@@ -92,7 +92,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
       configuration = pathOrConfig
     }
 
-    super(signer.address, { ...configuration, network: signer.network, bip: signer.bip })
+    super(signer.address, { ...configuration, network: signer.network })
 
     /**
      * If true, disposes the signer on calls to the 'dispose' method.
