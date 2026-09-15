@@ -39,7 +39,7 @@ export default class PrivateKeySignerBtc {
   /**
    * Creates a new private key signer.
    *
-   * @param {string | Uint8Array | Buffer} privateKey - The raw private key (hex string or 32 bytes).
+   * @param {string | Uint8Array} privateKey - The raw private key (hex string or 32 bytes).
    * @param {BtcSignerConfig} [config] - The signer configuration.
    * @throws {ValueError} If the private key is not 32 bytes.
    * @throws {ValueError} If an unsupported BIP is specified.
