@@ -3,7 +3,7 @@ import { describe, expect, test } from '@jest/globals'
 import * as bip39 from 'bip39'
 import { Psbt, networks, address as btcAddress } from 'bitcoinjs-lib'
 
-import { InvalidSignerError, ValueError } from '@tetherto/wdk-wallet'
+import { ValueError } from '@tetherto/wdk-wallet'
 
 import SeedSignerBtc from '../../src/signers/seed-signer-btc.js'
 
@@ -247,17 +247,6 @@ describe('SeedSignerBtc', () => {
       await expect(signer.derive("a'/b/c")).rejects.toThrow(INVALID_PATH_MESSAGE)
 
       signer.dispose()
-    })
-
-    test('should throw when deriving from a disposed signer', async () => {
-      const signer = new SeedSignerBtc(VALID_SEED_PHRASE)
-
-      signer.dispose()
-
-      const promise = signer.derive("0'/0/0")
-
-      await expect(promise).rejects.toThrow(InvalidSignerError)
-      await expect(promise).rejects.toThrow('Cannot derive: the signer has been disposed.')
     })
   })
 

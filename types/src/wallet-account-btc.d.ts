@@ -15,8 +15,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase or seed bytes.
      * @param {string} path - The derivation path relative to the BIP root (e.g. "0'/0/0").
      * @param {BtcWalletConfig} [config] - The configuration object.
-     * @throws {ValueError} If the seed is a string but not a valid BIP-39 mnemonic.
-     * @throws {ValueError} If the configured bip is not supported.
+     * @throws {ValueError} If the given seed phrase is invalid, or the configured bip is not supported.
      */
     constructor(seed: string | Uint8Array, path: string, config?: BtcWalletConfig);
     /**

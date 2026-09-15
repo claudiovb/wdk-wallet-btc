@@ -1,4 +1,5 @@
-export default class WalletManagerBtc extends WalletManager {
+/** @extends {WalletManager<ISignerBtc>} */
+export default class WalletManagerBtc extends WalletManager<ISignerBtc> {
     /**
      * Creates a new wallet manager for the bitcoin blockchain from a BIP-39 seed.
      *
@@ -16,11 +17,11 @@ export default class WalletManagerBtc extends WalletManager {
      * **Warning:** the signer is kept exactly as given, not cloned. Disposing it directly breaks
      * further account derivation, and the manager never disposes a signer you supplied.
      *
-     * @param {ISigner} signer - The default signer.
+     * @param {ISignerBtc} signer - The default signer.
      * @param {BtcWalletConfig} [config] - The configuration object.
      * @throws {InvalidSignerError} If the default signer does not support account derivation.
      */
-    constructor(signer: ISigner, config?: BtcWalletConfig);
+    constructor(signer: ISignerBtc, config?: BtcWalletConfig);
     /**
      * If true, disposes the default signer on calls to the 'dispose' method.
      *
@@ -54,7 +55,7 @@ export default class WalletManagerBtc extends WalletManager {
      * @param {string} [options.signerName] - The signer name. Omit to use the default signer.
      * @returns {Promise<WalletAccountBtc>} The account.
      * @throws {NoSuchElementError} If a signer name is given but no signer exists with that name.
-     * @throws {InvalidSignerError} If the signer doesn't support account derivation.
+     * @throws {UnsupportedOperationError} If the signer doesn't support account derivation.
      * @example
      * // Returns the account with derivation path
      * // For mainnet (bitcoin): m/84'/0'/0'/0/1
@@ -90,7 +91,7 @@ export default class WalletManagerBtc extends WalletManager {
      * @param {string} [options.signerName] - The signer name. Omit to use the default signer.
      * @returns {Promise<WalletAccountBtc>} The account.
      * @throws {NoSuchElementError} If a signer name is given but no signer exists with that name.
-     * @throws {InvalidSignerError} If the signer doesn't support account derivation.
+     * @throws {UnsupportedOperationError} If the signer doesn't support account derivation.
      */
     getAccountByPath(path: string, options?: {
         signerName?: string;
@@ -115,10 +116,10 @@ export default class WalletManagerBtc extends WalletManager {
     dispose(): void;
 }
 export type FeeRates = import("@tetherto/wdk-wallet").FeeRates;
-export type ISigner = import("@tetherto/wdk-wallet").ISigner;
 export type NoSuchElementError = import("@tetherto/wdk-wallet").NoSuchElementError;
 export type ValueError = import("@tetherto/wdk-wallet").ValueError;
 export type InvalidSignerError = import("@tetherto/wdk-wallet").InvalidSignerError;
+export type UnsupportedOperationError = import("@tetherto/wdk-wallet").UnsupportedOperationError;
 export type BtcWalletConfig = import("./wallet-account-btc.js").BtcWalletConfig;
 export type ISignerBtc = import("./signers/signer-btc.js").ISignerBtc;
 export type IBtcClient = import("./transports/index.js").IBtcClient;

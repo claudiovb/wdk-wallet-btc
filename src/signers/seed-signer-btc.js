@@ -16,7 +16,7 @@ import { hmac } from '@noble/hashes/hmac'
 import { sha512 } from '@noble/hashes/sha2'
 import { initEccLib, networks, Psbt } from 'bitcoinjs-lib'
 import { BIP32Factory } from 'bip32'
-import { InvalidSignerError, ValueError } from '@tetherto/wdk-wallet'
+import { ValueError } from '@tetherto/wdk-wallet'
 
 import * as bip39 from 'bip39'
 import * as ecc from '@bitcoinerlab/secp256k1'
@@ -219,12 +219,8 @@ export default class SeedSignerBtc {
    *
    * @param {string} relPath - The path segment to derive, relative to this signer's own path.
    * @returns {Promise<SeedSignerBtc>} The derived child signer.
-   * @throws {InvalidSignerError} If the signer has been disposed.
    */
   async derive (relPath) {
-    if (!this._account) {
-      throw new InvalidSignerError('Cannot derive: the signer has been disposed.')
-    }
     const signer = Object.create(SeedSignerBtc.prototype)
     SeedSignerBtc._init(signer, this._account.derivePath(relPath), this._config, `${this._path}/${relPath}`)
     return signer

@@ -21,8 +21,8 @@ import WalletAccountBtc from './wallet-account-btc.js'
 import SeedSignerBtc, { getBtcDerivationPathPrefix } from './signers/seed-signer-btc.js'
 
 /** @typedef {import('@tetherto/wdk-wallet').FeeRates} FeeRates */
-/** @typedef {import('@tetherto/wdk-wallet').ISigner} ISigner */
 /** @typedef {import('@tetherto/wdk-wallet').NoSuchElementError} NoSuchElementError */
+/** @typedef {import('@tetherto/wdk-wallet').UnsupportedOperationError} UnsupportedOperationError */
 /** @typedef {import('@tetherto/wdk-wallet').ValueError} ValueError */
 
 /** @typedef {import('./wallet-account-btc.js').BtcWalletConfig} BtcWalletConfig */
@@ -32,6 +32,7 @@ import SeedSignerBtc, { getBtcDerivationPathPrefix } from './signers/seed-signer
 
 const MEMPOOL_SPACE_URL = 'https://mempool.space'
 
+/** @extends {WalletManager<ISignerBtc>} */
 export default class WalletManagerBtc extends WalletManager {
   /**
    * Creates a new wallet manager for the bitcoin blockchain from a BIP-39 seed.
@@ -52,7 +53,7 @@ export default class WalletManagerBtc extends WalletManager {
    * further account derivation, and the manager never disposes a signer you supplied.
    *
    * @overload
-   * @param {ISigner} signer - The default signer.
+   * @param {ISignerBtc} signer - The default signer.
    * @param {BtcWalletConfig} [config] - The configuration object.
    * @throws {InvalidSignerError} If the default signer does not support account derivation.
    */
@@ -116,7 +117,7 @@ export default class WalletManagerBtc extends WalletManager {
    * @param {string} [options.signerName] - The signer name. Omit to use the default signer.
    * @returns {Promise<WalletAccountBtc>} The account.
    * @throws {NoSuchElementError} If a signer name is given but no signer exists with that name.
-   * @throws {InvalidSignerError} If the signer doesn't support account derivation.
+   * @throws {UnsupportedOperationError} If the signer doesn't support account derivation.
    * @example
    * // Returns the account with derivation path
    * // For mainnet (bitcoin): m/84'/0'/0'/0/1
@@ -167,7 +168,7 @@ export default class WalletManagerBtc extends WalletManager {
    * @param {string} [options.signerName] - The signer name. Omit to use the default signer.
    * @returns {Promise<WalletAccountBtc>} The account.
    * @throws {NoSuchElementError} If a signer name is given but no signer exists with that name.
-   * @throws {InvalidSignerError} If the signer doesn't support account derivation.
+   * @throws {UnsupportedOperationError} If the signer doesn't support account derivation.
    */
   async getAccountByPath (path, options = {}) {
     const { signerName } = options

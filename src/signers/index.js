@@ -14,3 +14,5 @@
 export { ISignerBtc } from './signer-btc.js'
 export { default, default as SeedSignerBtc } from './seed-signer-btc.js'
 export { default as PrivateKeySignerBtc } from './private-key-signer-btc.js'
+
+/** @typedef {import('./signer-btc.js').Psbt} Psbt */

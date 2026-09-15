@@ -96,7 +96,6 @@ export default class SeedSignerBtc implements ISignerBtc {
      *
      * @param {string} relPath - The path segment to derive, relative to this signer's own path.
      * @returns {Promise<SeedSignerBtc>} The derived child signer.
-     * @throws {InvalidSignerError} If the signer has been disposed.
      */
     derive(relPath: string): Promise<SeedSignerBtc>;
     /**
@@ -133,7 +132,6 @@ export default class SeedSignerBtc implements ISignerBtc {
 export type ISignerBtc = import("./signer-btc.js").ISignerBtc;
 export type BtcSignerConfig = import("./signer-btc.js").BtcSignerConfig;
 export type KeyPair = import("@tetherto/wdk-wallet").KeyPair;
-export type InvalidSignerError = import("@tetherto/wdk-wallet").InvalidSignerError;
 export type ValueError = import("@tetherto/wdk-wallet").ValueError;
 export type BIP32Interface = import("bip32").BIP32Interface;
 export type Network = import("bitcoinjs-lib").Network;
