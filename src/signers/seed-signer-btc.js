@@ -70,6 +70,7 @@ export function getBtcDerivationPathPrefix (config = {}) {
  * material once the node is built. The node carries the given network's version bytes, so any
  * extended keys serialized from it (xpub/tpub) reflect the configured network.
  *
+ * @internal
  * @param {Buffer} seed - The seed buffer.
  * @param {Network} [network] - The network whose version bytes the node should carry (default: bitcoin mainnet).
  * @returns {BIP32Interface} The master node.
