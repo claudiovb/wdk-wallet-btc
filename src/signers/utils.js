@@ -13,10 +13,10 @@
 // limitations under the License.
 'use strict'
 
-import { payments, Transaction } from 'bitcoinjs-lib'
+import { payments } from 'bitcoinjs-lib'
 import bitcoinMessageModule from '@bitcoinerlab/btcmessage'
 import * as ecc from '@bitcoinerlab/secp256k1'
-import { toBase64, compare } from 'uint8array-tools'
+import { toBase64 } from 'uint8array-tools'
 import { ValueError } from '@tetherto/wdk-wallet'
 
 const { MessageFactory } = bitcoinMessageModule.default ?? bitcoinMessageModule
@@ -25,116 +25,28 @@ const bitcoinMessage = MessageFactory(ecc)
 /** @typedef {import('bitcoinjs-lib').Network} Network */
 /** @typedef {import('bitcoinjs-lib').Psbt} Psbt */
 /** @typedef {import('./signer-btc.js').BtcSignerConfig} BtcSignerConfig */
+/** @typedef {import('./signer-btc.js').BtcAddressType} BtcAddressType */
 /** @typedef {import('ecpair').ECPairInterface | import('bip32').BIP32Interface} SignerLike */
-/**
-  * @internal
-  * @typedef {Object} InputOwnershipResult
-  * @property {Object} input - The raw PSBT input data.
-  * @property {{ script: Uint8Array, value: bigint } | null} prevOut - The previous output, or null if unavailable.
-  * @property {boolean} isOurs - Whether the input belongs to the given script.
-*/
 
 /**
- * Builds a payment output script based on BIP standard.
+ * Signs every PSBT input the given leaf key controls, in place.
  *
- * @internal
- * @param {number} bip - The BIP standard (44 for P2PKH, 84 for P2WPKH).
- * @param {Uint8Array} pubkey - The public key.
- * @param {Network} network - The network configuration.
- * @returns {Uint8Array} The output script.
- */
-function buildPaymentScript (bip, pubkey, network) {
-  const payment = bip === 84
-    ? payments.p2wpkh({ pubkey, network })
-    : payments.p2pkh({ pubkey, network })
-  return payment.output
-}
-
-/**
- * Detects whether a PSBT input belongs to the given script.
- *
- * @internal
- * @param {Psbt} psbtInstance - The PSBT instance.
- * @param {number} i - The input index.
- * @param {Uint8Array} myScript - The script to match against.
- * @returns {InputOwnershipResult} The input data and ownership status.
- */
-function detectInputOwnership (psbtInstance, i, myScript) {
-  const input = psbtInstance.data.inputs[i] || {}
-  const txIn = psbtInstance.txInputs[i]
-  let prevOut = null
-  let isOurs = false
-
-  try {
-    if (input.nonWitnessUtxo) {
-      const prevTx = Transaction.fromBuffer(input.nonWitnessUtxo)
-      prevOut = prevTx.outs[txIn.index]
-    } else if (input.witnessUtxo) {
-      prevOut = input.witnessUtxo
-    }
-    isOurs = !!(prevOut && prevOut.script && myScript && compare(prevOut.script, myScript) === 0)
-  } catch (err) {
-    isOurs = false
-  }
-
-  return { input, prevOut, isOurs }
-}
-
-/**
- * Adds witnessUtxo to a PSBT input if needed for BIP84 signing.
- *
- * @internal
- * @param {Psbt} psbtInstance - The PSBT instance.
- * @param {number} i - The input index.
- * @param {number} bip - The BIP standard.
- * @param {{ script: Uint8Array, value: bigint } | null} prevOut - The previous output.
- * @param {Object} input - The input data.
- */
-function ensureWitnessUtxoIfNeeded (psbtInstance, i, bip, prevOut, input) {
-  if (bip === 84 && prevOut && prevOut.script && typeof prevOut.value === 'bigint' && !input.witnessUtxo) {
-    psbtInstance.updateInput(i, {
-      witnessUtxo: {
-        script: prevOut.script,
-        value: prevOut.value
-      }
-    })
-  }
-}
-
-/**
- * Signs every PSBT input owned by the given leaf key, in place.
- *
- * Detects which inputs belong to `account` (by matching the derived payment script), ensures the
- * witnessUtxo is present for SegWit (BIP84) inputs, and signs each owned input directly with the leaf
- * key via {@link Psbt#signInput}. Inputs that cannot be signed (finalized, missing data) are skipped.
- * The PSBT is not finalized, to support partially signed workflows.
+ * Input matching, previous-output validation and sighash computation are delegated entirely to
+ * {@link Psbt#signAllInputs}: any input whose script the key controls gets a partial signature,
+ * regardless of its script type. The PSBT is not finalized, to support partially signed
+ * workflows (e.g. multisig).
  *
  * @internal
  * @param {Psbt} psbtInstance - The PSBT instance to sign (mutated in place).
  * @param {SignerLike} account - A leaf signer exposing `publicKey` and a `sign` method (e.g. an ECPair or a BIP32 node).
- * @param {number} bip - The BIP standard (44 or 84).
- * @param {Network} network - The network configuration.
  * @returns {string} The (partially) signed PSBT in base64 format.
+ * @throws {Error} If the signer cannot sign any input of the PSBT.
  */
-export function signPsbtWithKey (psbtInstance, account, bip, network) {
+export function signPsbtWithKey (psbtInstance, account) {
   const pubkey = account && account.publicKey
   if (!pubkey) return psbtInstance.toBase64()
 
-  const myScript = buildPaymentScript(bip, pubkey, network)
-
-  for (let i = 0; i < psbtInstance.inputCount; i++) {
-    const { input, prevOut, isOurs } = detectInputOwnership(psbtInstance, i, myScript)
-
-    if (!isOurs) continue
-
-    ensureWitnessUtxoIfNeeded(psbtInstance, i, bip, prevOut, input)
-
-    try {
-      psbtInstance.signInput(i, account)
-    } catch (_) {
-      // Ignore inputs we cannot sign (e.g., finalized or missing data)
-    }
-  }
+  psbtInstance.signAllInputs(account)
 
   return psbtInstance.toBase64()
 }
@@ -145,14 +57,30 @@ export function signPsbtWithKey (psbtInstance, account, bip, network) {
  * @internal
  * @param {BtcSignerConfig} [config] - The configuration object.
  * @returns {BtcSignerConfig} The normalized configuration.
- * @throws {ValueError} If an unsupported BIP is specified.
+ * @throws {ValueError} If an unsupported address type is specified.
  */
 export function normalizeConfig (config = {}) {
-  const bip = config.bip ?? 84
+  const type = config.type ?? 'segwit'
+  if (!['legacy', 'segwit'].includes(type)) {
+    throw new ValueError('Invalid type specification. Supported types: legacy, segwit.')
+  }
+  return { network: config.network, type }
+}
+
+/**
+ * Maps a wallet-level BIP purpose (44 or 84) to the equivalent signer address type.
+ *
+ * @internal
+ * @param {44 | 84} [bip] - The BIP address type from the wallet configuration.
+ * @returns {BtcAddressType | undefined} The signer address type, or undefined if no bip was given.
+ * @throws {ValueError} If an unsupported BIP is specified.
+ */
+export function getSignerTypeForBip (bip) {
+  if (bip === undefined) return undefined
   if (![44, 84].includes(bip)) {
     throw new ValueError('Invalid bip specification. Supported bips: 44, 84.')
   }
-  return { network: config.network, bip }
+  return bip === 44 ? 'legacy' : 'segwit'
 }
 
 /**
@@ -161,11 +89,11 @@ export function normalizeConfig (config = {}) {
  * @internal
  * @param {Uint8Array} publicKey - The public key.
  * @param {Network} network - The network configuration.
- * @param {number} [bip] - The BIP standard (44 for P2PKH, 84 for P2WPKH) (default: 44).
+ * @param {BtcAddressType} [type] - The address type (default: "legacy").
  * @returns {string} The Bitcoin address.
  */
-export function getAddressFromPublicKey (publicKey, network, bip = 44) {
-  const { address } = bip === 44
+export function getAddressFromPublicKey (publicKey, network, type = 'legacy') {
+  const { address } = type === 'legacy'
     ? payments.p2pkh({ pubkey: publicKey, network })
     : payments.p2wpkh({ pubkey: publicKey, network })
   return address
@@ -177,9 +105,9 @@ export function getAddressFromPublicKey (publicKey, network, bip = 44) {
  * @internal
  * @param {string} message - The message to sign.
  * @param {Uint8Array} privateKey - The private key.
- * @param {number} bip - The BIP standard (44 or 84).
+ * @param {BtcAddressType} type - The address type.
  * @returns {string} The message's signature.
  */
-export function signMessage (message, privateKey, bip) {
-  return toBase64(bitcoinMessage.sign(message, privateKey, true, bip === 84 ? { segwitType: 'p2wpkh' } : undefined))
+export function signMessage (message, privateKey, type) {
+  return toBase64(bitcoinMessage.sign(message, privateKey, true, type === 'segwit' ? { segwitType: 'p2wpkh' } : undefined))
 }

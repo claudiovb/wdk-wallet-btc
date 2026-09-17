@@ -19,6 +19,7 @@ import FailoverProvider from '@tetherto/wdk-failover-provider'
 
 import WalletAccountBtc from './wallet-account-btc.js'
 import SeedSignerBtc, { getBtcDerivationPathPrefix } from './signers/seed-signer-btc.js'
+import { getSignerTypeForBip } from './signers/utils.js'
 
 /** @typedef {import('@tetherto/wdk-wallet').FeeRates} FeeRates */
 /** @typedef {import('@tetherto/wdk-wallet').NoSuchElementError} NoSuchElementError */
@@ -62,7 +63,8 @@ export default class WalletManagerBtc extends WalletManager {
     let signer = seedOrSigner
     if (isSeed) {
       const { network, bip } = config
-      signer = new SeedSignerBtc(seedOrSigner, `m/${getBtcDerivationPathPrefix({ network, bip })}`, { network, bip })
+      const type = getSignerTypeForBip(bip)
+      signer = new SeedSignerBtc(seedOrSigner, `m/${getBtcDerivationPathPrefix({ network, type })}`, { network, type })
     }
     if (!signer.isDerivable) {
       throw new InvalidSignerError('The default signer must be derivable. Non-derivable signers (e.g. private-key signers) can only be registered by name via addSigner.')

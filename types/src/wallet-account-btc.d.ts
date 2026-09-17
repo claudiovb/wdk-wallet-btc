@@ -22,7 +22,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      * Creates a new bitcoin wallet account using a signer.
      *
      * @param {ISignerBtc} signer - The signer.
-     * @param {BtcAccountConfig & SignerOptions} [config] - The configuration object. The network and BIP are taken from the signer.
+     * @param {BtcAccountConfig & SignerOptions} [config] - The configuration object. The network and address type are taken from the signer.
      */
     constructor(signer: ISignerBtc, config?: BtcAccountConfig & SignerOptions);
     /**

@@ -12,7 +12,7 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
      *
      * @param {string | Uint8Array} privateKey - The raw private key (hex string or 32 bytes).
      * @param {BtcSignerConfig} [config] - The signer configuration.
-     * @throws {ValueError} If the private key is not 32 bytes, or an unsupported BIP is specified.
+     * @throws {ValueError} If the private key is not 32 bytes, or an unsupported address type is specified.
      */
     constructor(privateKey: string | Uint8Array, config?: BtcSignerConfig);
     /** @private */
@@ -52,11 +52,11 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
      */
     get network(): "bitcoin" | "regtest" | "testnet";
     /**
-     * The BIP address type of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
+     * The address type of the signer's addresses ("legacy" for P2PKH, "segwit" for P2WPKH).
      *
-     * @type {44 | 84}
+     * @type {BtcAddressType}
      */
-    get bip(): 44 | 84;
+    get type(): BtcAddressType;
     /**
      * The account's key pair (public and private keys).
      *
@@ -93,10 +93,11 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
      */
     sign(message: string): Promise<string>;
     /**
-     * Signs a PSBT (Partially Signed Bitcoin Transaction).
+     * Signs a PSBT (Partially Signed Bitcoin Transaction). Caller is responsible for finalizing it; we deliver it partially signed.
      *
      * @param {Psbt | string} psbt - The PSBT instance or base64 string.
-     * @returns {Promise<string>} The signed PSBT in base64 format.
+     * @returns {Promise<string>} The (partially) signed PSBT in base64 format.
+     * @throws {Error} If the signer cannot sign any input of the PSBT.
      */
     signPsbt(psbt: Psbt | string): Promise<string>;
     /**
@@ -106,6 +107,7 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
 }
 export type ISignerBtc = import("./signer-btc.js").ISignerBtc;
 export type BtcSignerConfig = import("./signer-btc.js").BtcSignerConfig;
+export type BtcAddressType = import("./signer-btc.js").BtcAddressType;
 export type KeyPair = import("@tetherto/wdk-wallet").KeyPair;
 export type UnsupportedOperationError = import("@tetherto/wdk-wallet").UnsupportedOperationError;
 export type ValueError = import("@tetherto/wdk-wallet").ValueError;

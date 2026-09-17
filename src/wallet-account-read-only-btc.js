@@ -85,7 +85,14 @@ const bitcoinMessage = MessageFactory(ecc)
  * @property {Omit<MempoolElectrumConfig, 'network'>} clientConfig - The Electrum client configuration.
  */
 
-/** @typedef {import('./signers/signer-btc.js').BtcSignerConfig} BtcSignerConfig */
+/**
+ * The wallet-level key configuration. Wallet classes map `bip` to the signer's address type
+ * (44 → "legacy", 84 → "segwit") when constructing signers.
+ *
+ * @typedef {Object} BtcKeyConfig
+ * @property {"bitcoin" | "regtest" | "testnet"} [network] - The name of the network to use (default: "bitcoin").
+ * @property {44 | 84} [bip] - The BIP address type: 44 (P2PKH / legacy) or 84 (P2WPKH / native SegWit) (default: 84).
+ */
 
 /**
  * @typedef {Object} BtcAccountConfig
@@ -95,9 +102,9 @@ const bitcoinMessage = MessageFactory(ecc)
  */
 
 /**
- * The wallet configuration, joining the signer configuration (network, bip) with the account configuration (client, retries, transactionMaxFee).
+ * The wallet configuration, joining the key configuration (network, bip) with the account configuration (client, retries, transactionMaxFee).
  *
- * @typedef {BtcSignerConfig & BtcAccountConfig} BtcWalletConfig
+ * @typedef {BtcKeyConfig & BtcAccountConfig} BtcWalletConfig
  */
 
 /**

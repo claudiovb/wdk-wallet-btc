@@ -19,11 +19,11 @@ export class ISignerBtc extends ISigner {
      */
     get network(): "bitcoin" | "regtest" | "testnet";
     /**
-     * The BIP address type of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
+     * The address type of the signer's addresses ("legacy" for P2PKH, "segwit" for P2WPKH).
      *
-     * @type {44 | 84}
+     * @type {BtcAddressType}
      */
-    get bip(): 44 | 84;
+    get type(): BtcAddressType;
     /**
      * Returns the extended public key (e.g. xpub/tpub).
      *
@@ -32,25 +32,31 @@ export class ISignerBtc extends ISigner {
      */
     getExtendedPublicKey(): Promise<string>;
     /**
-     * Signs a PSBT (Partially Signed Bitcoin Transaction).
+     * Signs a PSBT (Partially Signed Bitcoin Transaction). Caller is responsible for finalizing it; we deliver it partially signed.
      *
      * @param {Psbt | string} psbt - The PSBT instance or base64 string.
-     * @returns {Promise<string>} The signed PSBT in base64 format.
+     * @returns {Promise<string>} The (partially) signed PSBT in base64 format.
+     * @throws {Error} If the signer cannot sign any input of the PSBT.
      */
     signPsbt(psbt: Psbt | string): Promise<string>;
 }
+/**
+ * The signer's address type. Governs address encoding and message signing only, not PSBT signing.
+ *
+ * - "legacy": [P2PKH (BIP-44)](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
+ * - "segwit": [P2WPKH / native SegWit (BIP-84)](https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki)
+ * TODO: Add support for P2SH-wrapped SegWit (BIP-49) and BIP-86 (Taproot).
+ */
+export type BtcAddressType = "legacy" | "segwit";
 export type BtcSignerConfig = {
     /**
      * - The name of the network to use (default: "bitcoin").
      */
     network?: "bitcoin" | "regtest" | "testnet";
     /**
-     * - The BIP address type used for key and address derivation.
-     * - 44: [BIP-44 (P2PKH / legacy)](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
-     * - 84: [BIP-84 (P2WPKH / native SegWit)](https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki)
-     * - Default: 84 (P2WPKH).
+     * - The signer's address type (default: "segwit").
      */
-    bip?: 44 | 84;
+    type?: BtcAddressType;
 };
 export type Psbt = import("bitcoinjs-lib").Psbt;
 export type UnsupportedOperationError = import("@tetherto/wdk-wallet").UnsupportedOperationError;

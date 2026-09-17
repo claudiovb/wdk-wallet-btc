@@ -5,7 +5,7 @@
  * @internal
  * @param {BtcSignerConfig} [config] - The signer configuration.
  * @returns {string} The derivation path prefix (e.g. "84'/0'").
- * @throws {ValueError} If an unsupported BIP is specified.
+ * @throws {ValueError} If an unsupported address type is specified.
  */
 export function getBtcDerivationPathPrefix(config?: BtcSignerConfig): string;
 /**
@@ -26,16 +26,16 @@ export default class SeedSignerBtc implements ISignerBtc {
      * @param {string} xprv - The extended private key in base58 format.
      * @param {BtcSignerConfig} [config] - The signer configuration.
      * @returns {SeedSignerBtc} The signer instance.
-     * @throws {ValueError} If an unsupported BIP is specified.
+     * @throws {ValueError} If an unsupported address type is specified.
      */
     static fromXprv(xprv: string, config?: BtcSignerConfig): SeedSignerBtc;
     /**
      * Creates a SeedSignerBtc from a BIP-39 seed.
      *
      * @param {string | Uint8Array} seed - BIP-39 mnemonic or seed bytes.
-     * @param {string} [path] - A BIP-32 path (default: the first account for the configured BIP and network, e.g. "m/84'/0'/0'/0/0").
+     * @param {string} [path] - A BIP-32 path (default: the first account for the configured address type and network, e.g. "m/84'/0'/0'/0/0").
      * @param {BtcSignerConfig} [config] - The signer configuration.
-     * @throws {ValueError} If the given seed phrase is invalid, or an unsupported BIP is specified.
+     * @throws {ValueError} If the given seed phrase is invalid, or an unsupported address type is specified.
      */
     constructor(seed: string | Uint8Array, path?: string, config?: BtcSignerConfig);
     /** @private */
@@ -78,11 +78,11 @@ export default class SeedSignerBtc implements ISignerBtc {
      */
     get network(): "bitcoin" | "regtest" | "testnet";
     /**
-     * The BIP address type of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
+     * The address type of the signer's addresses ("legacy" for P2PKH, "segwit" for P2WPKH).
      *
-     * @type {44 | 84}
+     * @type {BtcAddressType}
      */
-    get bip(): 44 | 84;
+    get type(): BtcAddressType;
     /**
      * The account's key pair (private and public key buffers).
      *
@@ -117,10 +117,11 @@ export default class SeedSignerBtc implements ISignerBtc {
      */
     sign(message: string): Promise<string>;
     /**
-     * Signs a PSBT (Partially Signed Bitcoin Transaction).
+     * Signs a PSBT (Partially Signed Bitcoin Transaction). Caller is responsible for finalizing it; we deliver it partially signed.
      *
      * @param {Psbt | string} psbt - The PSBT instance or base64 string.
-     * @returns {Promise<string>} The signed PSBT in base64 format.
+     * @returns {Promise<string>} The (partially) signed PSBT in base64 format.
+     * @throws {Error} If the signer cannot sign any input of the PSBT.
      */
     signPsbt(psbt: Psbt | string): Promise<string>;
     /**
@@ -130,6 +131,7 @@ export default class SeedSignerBtc implements ISignerBtc {
 }
 export type ISignerBtc = import("./signer-btc.js").ISignerBtc;
 export type BtcSignerConfig = import("./signer-btc.js").BtcSignerConfig;
+export type BtcAddressType = import("./signer-btc.js").BtcAddressType;
 export type KeyPair = import("@tetherto/wdk-wallet").KeyPair;
 export type ValueError = import("@tetherto/wdk-wallet").ValueError;
 export type BIP32Interface = import("bip32").BIP32Interface;

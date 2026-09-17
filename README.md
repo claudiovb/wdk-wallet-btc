@@ -783,10 +783,10 @@ new SeedSignerBtc(seed, path, config);
 **Parameters:**
 
 - `seed` (string | Uint8Array): BIP-39 mnemonic seed phrase or seed bytes
-- `path` (string, optional): The absolute derivation path of the signer's node (default: the first account for the configured BIP, e.g. `m/84'/0'/0'/0/0` on mainnet). The path is not required to match the configured BIP purpose
+- `path` (string, optional): The absolute derivation path of the signer's node (default: the first account for the configured address type, e.g. `m/84'/0'/0'/0/0` on mainnet). The path is not required to match the configured address type's purpose
 - `config` (BtcSignerConfig, optional): Signer configuration
   - `network` (string, optional): "bitcoin", "testnet", or "regtest" (default: "bitcoin")
-  - `bip` (number, optional): 44 (legacy) or 84 (native SegWit) (default: 84) — governs address encoding only
+  - `type` (string, optional): "legacy" (P2PKH) or "segwit" (P2WPKH) (default: "segwit") — governs address encoding and message signing only
 
 **Example:**
 
@@ -811,7 +811,7 @@ const signer = SeedSignerBtc.fromXprv(xprv, config);
 | `derive(relPath)`        | Derives a child signer at the given path relative to this signer | `Promise<SeedSignerBtc>` |
 | `getAddress()`           | Returns the signer's address                                     | `Promise<string>`        |
 | `sign(message)`          | Signs a message using the private key (BIP-137)                  | `Promise<string>`        |
-| `signPsbt(psbt)`         | Signs a PSBT and returns the signed PSBT in base64 format        | `Promise<string>`        |
+| `signPsbt(psbt)`         | Signs every PSBT input the key controls (any script type); returns base64, not finalized | `Promise<string>`        |
 | `getExtendedPublicKey()` | Returns the extended public key (xpub) of the signer's node      | `Promise<string>`        |
 | `dispose()`              | Clears private keys from memory                                  | `void`                   |
 
@@ -822,7 +822,7 @@ const signer = SeedSignerBtc.fromXprv(xprv, config);
 | `path`         | `string`          | The absolute derivation path of this signer's node                 |
 | `address`      | `string`          | The signer's address                                               |
 | `network`      | `string`          | The configured network ("bitcoin", "testnet", or "regtest")        |
-| `bip`          | `number`          | The configured BIP address type (44 or 84)                         |
+| `type`         | `string`          | The configured address type ("legacy" or "segwit")                 |
 | `keyPair`      | `KeyPair \| null` | The signer's key pair (⚠️ Contains sensitive data); nulls after disposal |
 | `isDerivable`  | `boolean`         | Always true — every seed signer can derive children                |
 
@@ -839,7 +839,7 @@ new PrivateKeySignerBtc(privateKey, config);
 **Parameters:**
 
 - `privateKey` (string | Uint8Array | Buffer): Raw private key (hex string or 32 bytes)
-- `config` (BtcSignerConfig, optional): Signer configuration (`network` and `bip`, see [SeedSignerBtc constructor](#constructor-2))
+- `config` (BtcSignerConfig, optional): Signer configuration (`network` and `type`, see [SeedSignerBtc constructor](#constructor-2))
 
 **Example:**
 
@@ -853,7 +853,7 @@ const signer = new PrivateKeySignerBtc("a1b2c3d4e5f6789abcdef...", config);
 | ------------------------ | ----------------------------------------------------------------- | ----------------- |
 | `getAddress()`           | Returns the signer's address                                      | `Promise<string>` |
 | `sign(message)`          | Signs a message using the private key (BIP-137)                   | `Promise<string>` |
-| `signPsbt(psbt)`         | Signs a PSBT and returns the signed PSBT in base64 format         | `Promise<string>` |
+| `signPsbt(psbt)`         | Signs every PSBT input the key controls (any script type); returns base64, not finalized | `Promise<string>` |
 | `derive(path)`           | Not supported — always throws an `UnsupportedOperationError`      | `Promise<never>`  |
 | `getExtendedPublicKey()` | Not supported — always throws an `UnsupportedOperationError`      | `Promise<never>`  |
 | `dispose()`              | Clears private keys from memory                                   | `void`            |
@@ -865,7 +865,7 @@ const signer = new PrivateKeySignerBtc("a1b2c3d4e5f6789abcdef...", config);
 | `path`        | `null`            | Always null — the signer is not bound to a derivation position     |
 | `address`     | `string`          | The signer's address                                               |
 | `network`     | `string`          | The configured network ("bitcoin", "testnet", or "regtest")        |
-| `bip`         | `number`          | The configured BIP address type (44 or 84)                         |
+| `type`        | `string`          | The configured address type ("legacy" or "segwit")                 |
 | `keyPair`     | `KeyPair \| null` | The signer's key pair (⚠️ Contains sensitive data); nulls after disposal |
 | `isDerivable` | `boolean`         | Always false — private-key signers cannot derive child accounts    |
 

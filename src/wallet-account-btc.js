@@ -20,6 +20,7 @@ import { AssertionError, MaximumFeeExceededError, UnsupportedOperationError, Val
 
 import PrivateKeySignerBtc from './signers/private-key-signer-btc.js'
 import SeedSignerBtc, { getBtcDerivationPathPrefix } from './signers/seed-signer-btc.js'
+import { getSignerTypeForBip } from './signers/utils.js'
 import WalletAccountReadOnlyBtc from './wallet-account-read-only-btc.js'
 import { compare, fromHex, toHex } from 'uint8array-tools'
 
@@ -76,7 +77,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    *
    * @overload
    * @param {ISignerBtc} signer - The signer.
-   * @param {BtcAccountConfig & SignerOptions} [config] - The configuration object. The network and BIP are taken from the signer.
+   * @param {BtcAccountConfig & SignerOptions} [config] - The configuration object. The network and address type are taken from the signer.
    */
 
   constructor (seedOrSigner, pathOrConfig = {}, config = {}) {
@@ -85,7 +86,8 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
     let signer, configuration
     if (isSeed) {
       const { network, bip, ...accountConfig } = config
-      signer = new SeedSignerBtc(seedOrSigner, `m/${getBtcDerivationPathPrefix({ network, bip })}/${pathOrConfig}`, { network, bip })
+      const type = getSignerTypeForBip(bip)
+      signer = new SeedSignerBtc(seedOrSigner, `m/${getBtcDerivationPathPrefix({ network, type })}/${pathOrConfig}`, { network, type })
       configuration = accountConfig
     } else {
       signer = seedOrSigner
@@ -147,7 +149,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    */
   static fromPrivateKey (privateKey, config = {}) {
     const { network, bip, ...accountConfig } = config
-    const signer = new PrivateKeySignerBtc(privateKey, { network, bip })
+    const signer = new PrivateKeySignerBtc(privateKey, { network, type: getSignerTypeForBip(bip) })
     return new WalletAccountBtc(signer, { ...accountConfig, shouldWipeSignerOnDisposal: true })
   }
 
@@ -495,7 +497,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
           index: utxo.tx_pos
         }
 
-        if (this._signer.bip === 84) {
+        if (this._signer.type === 'segwit') {
           psbt.addInput({
             ...baseInput,
             witnessUtxo: {
@@ -520,9 +522,6 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
 
     const signAndFinalize = async (psbt) => {
       const signedBase64 = await this._signer.signPsbt(psbt)
-      if (typeof signedBase64 !== 'string') {
-        throw new TypeError('signPsbt() must return a base64 string per the ISignerBtc contract')
-      }
       const signed = Psbt.fromBase64(signedBase64)
       signed.finalizeAllInputs()
       return signed.extractTransaction()

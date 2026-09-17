@@ -54,9 +54,9 @@ export const FEES = {
 }
 
 describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
-  const SIGNER_CONFIG = { network: 'regtest', bip }
+  const SIGNER_CONFIG = { network: 'regtest', type: bip === 44 ? 'legacy' : 'segwit' }
   const CLIENT_CONFIG = { client: { type: 'electrum', clientConfig: { host: HOST, port: ELECTRUM_PORT } } }
-  const CONFIG = { ...SIGNER_CONFIG, ...CLIENT_CONFIG }
+  const CONFIG = { network: 'regtest', bip, ...CLIENT_CONFIG }
   const DERIVATION_PATH_PREFIX = `m/${bip}'/1'`
 
   const bitcoin = new BitcoinCli({
@@ -166,7 +166,7 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
     })
 
     test('should derive the same account as a manually derived signer', async () => {
-      const seededAccount = new WalletAccountBtc(SEED_PHRASE, "0'/0/0", SIGNER_CONFIG)
+      const seededAccount = new WalletAccountBtc(SEED_PHRASE, "0'/0/0", { network: 'regtest', bip })
       const signer = await new SeedSignerBtc(SEED_PHRASE, DERIVATION_PATH_PREFIX, SIGNER_CONFIG).derive("0'/0/0")
       const signerAccount = new WalletAccountBtc(signer, {})
 
@@ -607,7 +607,7 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
     })
 
     test('should wipe the internally created signer on disposal', () => {
-      const account = WalletAccountBtc.fromPrivateKey(ACCOUNTS[bip].keyPair.privateKey, SIGNER_CONFIG)
+      const account = WalletAccountBtc.fromPrivateKey(ACCOUNTS[bip].keyPair.privateKey, { network: 'regtest', bip })
 
       expect(account.keyPair.privateKey).not.toBeNull()
 

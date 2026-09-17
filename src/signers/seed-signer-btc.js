@@ -33,6 +33,7 @@ import {
 
 /** @typedef {import('./signer-btc.js').ISignerBtc} ISignerBtc */
 /** @typedef {import('./signer-btc.js').BtcSignerConfig} BtcSignerConfig */
+/** @typedef {import('./signer-btc.js').BtcAddressType} BtcAddressType */
 /** @typedef {import('@tetherto/wdk-wallet').KeyPair} KeyPair */
 /** @typedef {import('bip32').BIP32Interface} BIP32Interface */
 /** @typedef {import('bitcoinjs-lib').Network} Network */
@@ -58,11 +59,11 @@ initEccLib(ecc)
  * @internal
  * @param {BtcSignerConfig} [config] - The signer configuration.
  * @returns {string} The derivation path prefix (e.g. "84'/0'").
- * @throws {ValueError} If an unsupported BIP is specified.
+ * @throws {ValueError} If an unsupported address type is specified.
  */
 export function getBtcDerivationPathPrefix (config = {}) {
-  const { network, bip } = normalizeConfig(config)
-  return `${bip}'/${network === 'bitcoin' ? 0 : 1}'`
+  const { network, type } = normalizeConfig(config)
+  return `${type === 'legacy' ? 44 : 84}'/${network === 'bitcoin' ? 0 : 1}'`
 }
 
 /**
@@ -125,9 +126,9 @@ export default class SeedSignerBtc {
    * Creates a SeedSignerBtc from a BIP-39 seed.
    *
    * @param {string | Uint8Array} seed - BIP-39 mnemonic or seed bytes.
-   * @param {string} [path] - A BIP-32 path (default: the first account for the configured BIP and network, e.g. "m/84'/0'/0'/0/0").
+   * @param {string} [path] - A BIP-32 path (default: the first account for the configured address type and network, e.g. "m/84'/0'/0'/0/0").
    * @param {BtcSignerConfig} [config] - The signer configuration.
-   * @throws {ValueError} If the given seed phrase is invalid, or an unsupported BIP is specified.
+   * @throws {ValueError} If the given seed phrase is invalid, or an unsupported address type is specified.
    */
   constructor (seed, path, config = {}) {
     if (typeof seed === 'string') {
@@ -160,7 +161,7 @@ export default class SeedSignerBtc {
    * @param {string} xprv - The extended private key in base58 format.
    * @param {BtcSignerConfig} [config] - The signer configuration.
    * @returns {SeedSignerBtc} The signer instance.
-   * @throws {ValueError} If an unsupported BIP is specified.
+   * @throws {ValueError} If an unsupported address type is specified.
    */
   static fromXprv (xprv, config = {}) {
     config = normalizeConfig(config)
@@ -211,12 +212,12 @@ export default class SeedSignerBtc {
   }
 
   /**
-   * The BIP address type of the signer's addresses (44 for P2PKH, 84 for P2WPKH).
+   * The address type of the signer's addresses ("legacy" for P2PKH, "segwit" for P2WPKH).
    *
-   * @type {44 | 84}
+   * @type {BtcAddressType}
    */
-  get bip () {
-    return this._config.bip
+  get type () {
+    return this._config.type
   }
 
   /**
@@ -270,18 +271,19 @@ export default class SeedSignerBtc {
    * @returns {Promise<string>} The message's signature.
    */
   async sign (message) {
-    return signMessage(message, this._account.privateKey, this._config.bip)
+    return signMessage(message, this._account.privateKey, this._config.type)
   }
 
   /**
-   * Signs a PSBT (Partially Signed Bitcoin Transaction).
+   * Signs a PSBT (Partially Signed Bitcoin Transaction). Caller is responsible for finalizing it; we deliver it partially signed.
    *
    * @param {Psbt | string} psbt - The PSBT instance or base64 string.
-   * @returns {Promise<string>} The signed PSBT in base64 format.
+   * @returns {Promise<string>} The (partially) signed PSBT in base64 format.
+   * @throws {Error} If the signer cannot sign any input of the PSBT.
    */
   async signPsbt (psbt) {
     const psbtInstance = typeof psbt === 'string' ? Psbt.fromBase64(psbt) : psbt
-    return signPsbtWithKey(psbtInstance, this._account, this._config.bip, this._network)
+    return signPsbtWithKey(psbtInstance, this._account)
   }
 
   /**
@@ -302,6 +304,6 @@ export default class SeedSignerBtc {
     signer._account = account
     signer._path = path
     signer._publicKey = account.publicKey
-    signer._address = getAddressFromPublicKey(account.publicKey, signer._network, config.bip)
+    signer._address = getAddressFromPublicKey(account.publicKey, signer._network, config.type)
   }
 }

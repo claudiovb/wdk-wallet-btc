@@ -289,7 +289,20 @@ export type BtcElectrumClientDescriptor = {
      */
     clientConfig: Omit<MempoolElectrumConfig, "network">;
 };
-export type BtcSignerConfig = import("./signers/signer-btc.js").BtcSignerConfig;
+/**
+ * The wallet-level key configuration. Wallet classes map `bip` to the signer's address type
+ * (44 → "legacy", 84 → "segwit") when constructing signers.
+ */
+export type BtcKeyConfig = {
+    /**
+     * - The name of the network to use (default: "bitcoin").
+     */
+    network?: "bitcoin" | "regtest" | "testnet";
+    /**
+     * - The BIP address type: 44 (P2PKH / legacy) or 84 (P2WPKH / native SegWit) (default: 84).
+     */
+    bip?: 44 | 84;
+};
 export type BtcAccountConfig = {
     /**
      * - The bitcoin client, or a list of bitcoin client options for connection fallback.
@@ -305,9 +318,9 @@ export type BtcAccountConfig = {
     transactionMaxFee?: number | bigint;
 };
 /**
- * The wallet configuration, joining the signer configuration (network, bip) with the account configuration (client, retries, transactionMaxFee).
+ * The wallet configuration, joining the key configuration (network, bip) with the account configuration (client, retries, transactionMaxFee).
  */
-export type BtcWalletConfig = BtcSignerConfig & BtcAccountConfig;
+export type BtcWalletConfig = BtcKeyConfig & BtcAccountConfig;
 export type BtcMaxSpendableResult = {
     /**
      * - The maximum spendable amount in satoshis.
