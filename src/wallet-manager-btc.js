@@ -111,7 +111,8 @@ export default class WalletManagerBtc extends WalletManager {
    *
    * **Warning:** derivation is relative to the signer's own path. If the signer sits at a leaf
    * (e.g. m/84'/0'/0'/0/0), getAccount(1) derives m/84'/0'/0'/0/0/0'/0/1 — probably not what
-   * you want; use a signer at the purpose/coin-type root (e.g. m/84'/0').
+   * you want; use a signer at the purpose/coin-type root (e.g. m/84'/0'), which is where
+   * `SeedSignerBtc` sits by default.
    *
    * @overload
    * @param {number} [index] - The index of the account to get (default: 0).

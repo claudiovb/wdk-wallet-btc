@@ -11,11 +11,17 @@ const VALID_SEED_PHRASE = 'cook voyage document eight skate token alien guide dr
 
 const MESSAGE = 'Dummy message to sign.'
 
-// Default account ("m/84'/1'/0'/0/0") for VALID_SEED_PHRASE with the default configuration.
-const DEFAULT_PATH = "m/84'/1'/0'/0/0"
-const DEFAULT_ADDRESS = 'bc1q8dqnpagwt9rtl7k38nuaa2ahf690avzkn3hdmf'
-const DEFAULT_PRIVATE_KEY = '007335c465cb8183b8a43d3f4eb7dbeb65f51e3a94c4a42369f3d2979ffa35fa'
-const DEFAULT_PUBLIC_KEY = '02e928d54a04833586b14e9c910884f589aebdc713a055e655c2fa13306c1b4f7f'
+// Coin-type node ("m/84'/1'") of VALID_SEED_PHRASE with the default configuration: the constructor's default path.
+const COIN_NODE_PATH = "m/84'/1'"
+const COIN_NODE_ADDRESS = 'bc1qkkmxq4ucwk7wn8aenmfrmjry7judzc7m0378n7'
+const COIN_NODE_PRIVATE_KEY = 'ffefaf3c8fdf28b80cb82f9a4b1d372cbaa71284db639a5cffdf17ad827e8cea'
+const COIN_NODE_PUBLIC_KEY = '02322222bb6018f1ecf3d6112e3073773f2d2dde82ff76daa60445024e071cb3a6'
+
+// First account ("m/84'/1'/0'/0/0") of VALID_SEED_PHRASE with the default configuration.
+const ACCOUNT_PATH = "m/84'/1'/0'/0/0"
+const ACCOUNT_ADDRESS = 'bc1q8dqnpagwt9rtl7k38nuaa2ahf690avzkn3hdmf'
+const ACCOUNT_PRIVATE_KEY = '007335c465cb8183b8a43d3f4eb7dbeb65f51e3a94c4a42369f3d2979ffa35fa'
+const ACCOUNT_PUBLIC_KEY = '02e928d54a04833586b14e9c910884f589aebdc713a055e655c2fa13306c1b4f7f'
 
 // Other accounts of VALID_SEED_PHRASE with the default configuration.
 const PATH_005_ADDRESS = 'bc1qzlqkg0jy73dek6pj99lu4qa87v0mqlmjq3czvj'
@@ -24,9 +30,9 @@ const PAST_LEAF_ADDRESS = 'bc1qzfcza368u8nfmcfj9358ds4jws3qt0z9tw0mq3'
 const CUSTOM_ROOT_ADDRESS = 'bc1qplyls7xzppmc3md439nft763ynylx6yzpkuxcq'
 const FROM_M_ADDRESS = 'bc1q908a7wncgavppdhkjl0qncx2889dal3t8km3xe'
 
-// The default account of VALID_SEED_PHRASE with a legacy (P2PKH) configuration.
-const LEGACY_PATH = "m/44'/1'/0'/0/0"
-const LEGACY_ADDRESS = '15MYf3n6zFiF4qJ5xAEbfstZFAniHN92Rx'
+// The coin-type node of VALID_SEED_PHRASE with a legacy (P2PKH) configuration.
+const LEGACY_COIN_NODE_PATH = "m/44'/1'"
+const LEGACY_COIN_NODE_ADDRESS = '16LNuaHBz6NDmjyS3RjEbCRRvkLejcrLv2'
 
 // Fixtures of VALID_SEED_PHRASE with a regtest configuration.
 const REGTEST_CONFIG = { network: 'regtest' }
@@ -85,12 +91,12 @@ function buildCrossTypePsbt (publicKey) {
 
 describe('SeedSignerBtc', () => {
   describe('constructor', () => {
-    test('should create a derivable signer at the default account', async () => {
+    test('should create a derivable signer at the coin-type node by default', async () => {
       const signer = new SeedSignerBtc(VALID_SEED_PHRASE)
 
       expect(signer.isDerivable).toBe(true)
-      expect(signer.path).toBe(DEFAULT_PATH)
-      expect(await signer.getAddress()).toBe(DEFAULT_ADDRESS)
+      expect(signer.path).toBe(COIN_NODE_PATH)
+      expect(await signer.getAddress()).toBe(COIN_NODE_ADDRESS)
       expect(signer.network).toBe('bitcoin')
       expect(signer.type).toBe('segwit')
 
@@ -102,8 +108,8 @@ describe('SeedSignerBtc', () => {
 
       const signer = new SeedSignerBtc(seedBytes)
 
-      expect(signer.path).toBe(DEFAULT_PATH)
-      expect(await signer.getAddress()).toBe(DEFAULT_ADDRESS)
+      expect(signer.path).toBe(COIN_NODE_PATH)
+      expect(await signer.getAddress()).toBe(COIN_NODE_ADDRESS)
 
       signer.dispose()
     })
@@ -120,8 +126,8 @@ describe('SeedSignerBtc', () => {
     test('should create a legacy signer with a P2PKH address', async () => {
       const signer = new SeedSignerBtc(VALID_SEED_PHRASE, undefined, { type: 'legacy' })
 
-      expect(signer.path).toBe(LEGACY_PATH)
-      expect(await signer.getAddress()).toBe(LEGACY_ADDRESS)
+      expect(signer.path).toBe(LEGACY_COIN_NODE_PATH)
+      expect(await signer.getAddress()).toBe(LEGACY_COIN_NODE_ADDRESS)
       expect(signer.type).toBe('legacy')
 
       signer.dispose()
@@ -168,8 +174,8 @@ describe('SeedSignerBtc', () => {
     test('should expose the expected key pair bytes', () => {
       const signer = new SeedSignerBtc(VALID_SEED_PHRASE)
 
-      expect(Buffer.from(signer.keyPair.privateKey).toString('hex')).toBe(DEFAULT_PRIVATE_KEY)
-      expect(Buffer.from(signer.keyPair.publicKey).toString('hex')).toBe(DEFAULT_PUBLIC_KEY)
+      expect(Buffer.from(signer.keyPair.privateKey).toString('hex')).toBe(COIN_NODE_PRIVATE_KEY)
+      expect(Buffer.from(signer.keyPair.publicKey).toString('hex')).toBe(COIN_NODE_PUBLIC_KEY)
 
       signer.dispose()
     })
@@ -182,10 +188,10 @@ describe('SeedSignerBtc', () => {
       const child = await root.derive("0'/0/0")
 
       expect(child.isDerivable).toBe(true)
-      expect(child.path).toBe(DEFAULT_PATH)
-      expect(await child.getAddress()).toBe(DEFAULT_ADDRESS)
-      expect(Buffer.from(child.keyPair.privateKey).toString('hex')).toBe(DEFAULT_PRIVATE_KEY)
-      expect(Buffer.from(child.keyPair.publicKey).toString('hex')).toBe(DEFAULT_PUBLIC_KEY)
+      expect(child.path).toBe(ACCOUNT_PATH)
+      expect(await child.getAddress()).toBe(ACCOUNT_ADDRESS)
+      expect(Buffer.from(child.keyPair.privateKey).toString('hex')).toBe(ACCOUNT_PRIVATE_KEY)
+      expect(Buffer.from(child.keyPair.publicKey).toString('hex')).toBe(ACCOUNT_PUBLIC_KEY)
 
       child.dispose()
       root.dispose()
@@ -203,8 +209,20 @@ describe('SeedSignerBtc', () => {
       root.dispose()
     })
 
+    test('should derive the first account from a signer at the default path', async () => {
+      const root = new SeedSignerBtc(VALID_SEED_PHRASE)
+
+      const child = await root.derive("0'/0/0")
+
+      expect(child.path).toBe(ACCOUNT_PATH)
+      expect(await child.getAddress()).toBe(ACCOUNT_ADDRESS)
+
+      child.dispose()
+      root.dispose()
+    })
+
     test('should derive past a leaf account', async () => {
-      const leaf = new SeedSignerBtc(VALID_SEED_PHRASE)
+      const leaf = new SeedSignerBtc(VALID_SEED_PHRASE, ACCOUNT_PATH)
 
       const child = await leaf.derive('0')
 
@@ -259,8 +277,8 @@ describe('SeedSignerBtc', () => {
       const grandchild = await intermediate.derive('0/0')
       intermediate.dispose()
 
-      expect(await grandchild.getAddress()).toBe(DEFAULT_ADDRESS)
-      expect(Buffer.from(grandchild.keyPair.privateKey).toString('hex')).toBe(DEFAULT_PRIVATE_KEY)
+      expect(await grandchild.getAddress()).toBe(ACCOUNT_ADDRESS)
+      expect(Buffer.from(grandchild.keyPair.privateKey).toString('hex')).toBe(ACCOUNT_PRIVATE_KEY)
 
       grandchild.dispose()
       root.dispose()
@@ -281,7 +299,7 @@ describe('SeedSignerBtc', () => {
 
       const address = await signer.getAddress()
 
-      expect(address).toBe(DEFAULT_ADDRESS)
+      expect(address).toBe(COIN_NODE_ADDRESS)
 
       signer.dispose()
     })
@@ -289,7 +307,7 @@ describe('SeedSignerBtc', () => {
 
   describe('getExtendedPublicKey', () => {
     test('should return the account tpub on regtest', async () => {
-      const signer = new SeedSignerBtc(VALID_SEED_PHRASE, undefined, REGTEST_CONFIG)
+      const signer = new SeedSignerBtc(VALID_SEED_PHRASE, ACCOUNT_PATH, REGTEST_CONFIG)
 
       const xpub = await signer.getExtendedPublicKey()
 
@@ -313,7 +331,7 @@ describe('SeedSignerBtc', () => {
 
   describe('sign', () => {
     test('should return the correct signature', async () => {
-      const signer = new SeedSignerBtc(VALID_SEED_PHRASE, undefined, REGTEST_CONFIG)
+      const signer = new SeedSignerBtc(VALID_SEED_PHRASE, ACCOUNT_PATH, REGTEST_CONFIG)
 
       const signature = await signer.sign(MESSAGE)
 
@@ -325,7 +343,7 @@ describe('SeedSignerBtc', () => {
 
   describe('signPsbt', () => {
     test('should sign owned inputs and leave foreign inputs untouched', async () => {
-      const signer = new SeedSignerBtc(VALID_SEED_PHRASE, undefined, REGTEST_CONFIG)
+      const signer = new SeedSignerBtc(VALID_SEED_PHRASE, ACCOUNT_PATH, REGTEST_CONFIG)
       const psbt = buildMixedPsbt(await signer.getAddress())
 
       const signed = await signer.signPsbt(psbt)
@@ -342,7 +360,7 @@ describe('SeedSignerBtc', () => {
     })
 
     test('should sign every input the key controls regardless of script type', async () => {
-      const signer = new SeedSignerBtc(VALID_SEED_PHRASE, undefined, REGTEST_CONFIG)
+      const signer = new SeedSignerBtc(VALID_SEED_PHRASE, ACCOUNT_PATH, REGTEST_CONFIG)
       const psbt = buildCrossTypePsbt(signer.keyPair.publicKey)
 
       const signed = await signer.signPsbt(psbt)
@@ -357,7 +375,7 @@ describe('SeedSignerBtc', () => {
     })
 
     test('should throw if the key controls none of the inputs', async () => {
-      const signer = new SeedSignerBtc(VALID_SEED_PHRASE, undefined, REGTEST_CONFIG)
+      const signer = new SeedSignerBtc(VALID_SEED_PHRASE, ACCOUNT_PATH, REGTEST_CONFIG)
       const network = networks.regtest
       const foreignScript = btcAddress.toOutputScript(PSBT_FOREIGN_ADDRESS, network)
       const psbt = new Psbt({ network })
@@ -377,9 +395,9 @@ describe('SeedSignerBtc', () => {
       signer.dispose()
 
       expect(signer.keyPair.privateKey).toBeNull()
-      expect(Buffer.from(signer.keyPair.publicKey).toString('hex')).toBe(DEFAULT_PUBLIC_KEY)
-      expect(signer.path).toBe(DEFAULT_PATH)
-      expect(await signer.getAddress()).toBe(DEFAULT_ADDRESS)
+      expect(Buffer.from(signer.keyPair.publicKey).toString('hex')).toBe(COIN_NODE_PUBLIC_KEY)
+      expect(signer.path).toBe(COIN_NODE_PATH)
+      expect(await signer.getAddress()).toBe(COIN_NODE_ADDRESS)
     })
 
     test('should be safe to call dispose more than once', () => {
@@ -409,8 +427,8 @@ describe('SeedSignerBtc', () => {
 
       root.dispose()
 
-      expect(await child.getAddress()).toBe(DEFAULT_ADDRESS)
-      expect(Buffer.from(child.keyPair.privateKey).toString('hex')).toBe(DEFAULT_PRIVATE_KEY)
+      expect(await child.getAddress()).toBe(ACCOUNT_ADDRESS)
+      expect(Buffer.from(child.keyPair.privateKey).toString('hex')).toBe(ACCOUNT_PRIVATE_KEY)
 
       child.dispose()
     })

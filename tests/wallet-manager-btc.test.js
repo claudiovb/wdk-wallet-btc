@@ -63,6 +63,16 @@ describe('WalletManagerBtc', () => {
       expect(account.path).toBe("m/84'/1'/0'/0/0")
     })
 
+    test('should derive standard accounts from a default-path seed signer', async () => {
+      const bareWallet = new WalletManagerBtc(new SeedSignerBtc(SEED_PHRASE))
+
+      const account = await bareWallet.getAccount(1)
+
+      expect(account.path).toBe("m/84'/1'/0'/0/1")
+
+      bareWallet.dispose()
+    })
+
     test('should return the account at the given index', async () => {
       const account = await wallet.getAccount(3)
 
@@ -116,7 +126,7 @@ describe('WalletManagerBtc', () => {
     })
 
     test('should use the named signer as given without taking ownership of it', async () => {
-      const named = new SeedSignerBtc(SEED_PHRASE)
+      const named = new SeedSignerBtc(SEED_PHRASE, "m/84'/1'/0'/0/0")
       wallet.addSigner('seed', named)
 
       const account = await wallet.getAccount('seed')

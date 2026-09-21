@@ -146,6 +146,32 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
       account.dispose()
     })
 
+    test('should derive the first account when no path is given', () => {
+      const account = new WalletAccountBtc(SEED_PHRASE, CONFIG)
+
+      expect(account.path).toBe(ACCOUNTS[bip].path)
+
+      expect({
+        privateKey: Buffer.from(account.keyPair.privateKey).toString('hex'),
+        publicKey: Buffer.from(account.keyPair.publicKey).toString('hex')
+      }).toEqual(ACCOUNTS[bip].keyPair)
+
+      account.dispose()
+    })
+
+    test('should derive the first account from seed bytes when no path is given', () => {
+      const account = new WalletAccountBtc(SEED, CONFIG)
+
+      expect(account.path).toBe(ACCOUNTS[bip].path)
+
+      expect({
+        privateKey: Buffer.from(account.keyPair.privateKey).toString('hex'),
+        publicKey: Buffer.from(account.keyPair.publicKey).toString('hex')
+      }).toEqual(ACCOUNTS[bip].keyPair)
+
+      account.dispose()
+    })
+
     test('should throw if the seed phrase is invalid', () => {
       expect(() => new WalletAccountBtc(INVALID_SEED_PHRASE, "0'/0/0", CONFIG))
         .toThrow(ValueError)

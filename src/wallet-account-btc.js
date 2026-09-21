@@ -59,6 +59,9 @@ const MAX_CACHE_ENTRIES = 1000
 const REQUEST_BATCH_SIZE = 64
 const POLLING_INTERVAL = 300
 
+/** The derivation path of the first account, relative to the BIP root. */
+const DEFAULT_ACCOUNT_PATH = "0'/0/0"
+
 /** @implements {IWalletAccount<string>} */
 export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
   /**
@@ -67,7 +70,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    *
    * @overload
    * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase or seed bytes.
-   * @param {string} path - The derivation path relative to the BIP root (e.g. "0'/0/0").
+   * @param {string | BtcWalletConfig} [path] - The derivation path relative to the BIP root (default: "0'/0/0"). The configuration object may be passed here instead when no path is given.
    * @param {BtcWalletConfig} [config] - The configuration object.
    * @throws {ValueError} If the given seed phrase is invalid, or the configured bip is not supported.
    */
@@ -85,9 +88,11 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
 
     let signer, configuration
     if (isSeed) {
-      const { network, bip, ...accountConfig } = config
+      const hasPath = typeof pathOrConfig === 'string'
+      const path = hasPath ? pathOrConfig : DEFAULT_ACCOUNT_PATH
+      const { network, bip, ...accountConfig } = hasPath ? config : pathOrConfig
       const type = getSignerTypeForBip(bip)
-      signer = new SeedSignerBtc(seedOrSigner, `m/${getBtcDerivationPathPrefix({ network, type })}/${pathOrConfig}`, { network, type })
+      signer = new SeedSignerBtc(seedOrSigner, `m/${getBtcDerivationPathPrefix({ network, type })}/${path}`, { network, type })
       configuration = accountConfig
     } else {
       signer = seedOrSigner
