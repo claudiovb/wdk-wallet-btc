@@ -9,9 +9,11 @@ const { ElectrumSsl, ElectrumTcp, ElectrumTls } = await import('../index.js')
 const HOST = 'electrum.example.com'
 const PORT = 50_002
 
-function createSocket () {
+function createSocket (onError) {
   return {
-    on: jest.fn(),
+    on: jest.fn((event, handler) => {
+      if (event === 'error' && onError) process.nextTick(() => handler(onError))
+    }),
     setEncoding: jest.fn(),
     setKeepAlive: jest.fn(),
     setNoDelay: jest.fn(),
@@ -54,11 +56,11 @@ describe.each([
   })
 
   test('reports certificate rejection with the host name', async () => {
-    const client = new Transport({ host: HOST, port: PORT })
+    const client = new Transport({ host: HOST, port: PORT, maxRetry: 0 })
     const error = Object.assign(new Error('self-signed certificate'), {
       code: 'DEPTH_ZERO_SELF_SIGNED_CERT'
     })
-    client._client.initElectrum = jest.fn().mockRejectedValue(error)
+    tlsConnect.mockReturnValue(createSocket(error))
 
     await expect(client.connect()).rejects.toThrow(
       `TLS certificate rejected for ${HOST}: self-signed certificate`

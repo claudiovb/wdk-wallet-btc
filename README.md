@@ -580,6 +580,8 @@ This package works with Bitcoin networks:
 
 **Important**: While the package defaults to `electrum.blockstream.info:50001` for convenience, **we strongly recommend configuring your own Electrum server** for production use.
 
+TLS and SSL Electrum connections verify the server certificate and hostname. Configure a certificate trusted by the client; self-signed or hostname-mismatched certificates are rejected. The default plaintext TCP transport is unchanged.
+
 #### Recommended Approach:
 
 **For Production:**

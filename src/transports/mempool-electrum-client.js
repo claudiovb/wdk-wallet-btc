@@ -158,16 +158,13 @@ export default class MempoolElectrumClient {
         this._connected = true
       })
       .catch(error => {
-        if (this._protocol !== 'tls' && this._protocol !== 'ssl') throw error
+        if ((this._protocol !== 'tls' && this._protocol !== 'ssl') || !isCertificateError(error)) throw error
 
         const detail = error instanceof Error ? error.message : String(error)
-        const message = isCertificateError(error)
-          ? `TLS certificate rejected for ${this._host}: ${detail}`
-          : `TLS connection to ${this._host} failed: ${detail}`
-
-        throw new ProviderError(message, {
-          reason: ProviderErrorReason.NETWORK_ERROR
-        })
+        throw new ProviderError(
+          `TLS certificate rejected for ${this._host}: ${detail}`,
+          { reason: ProviderErrorReason.NETWORK_ERROR, cause: error }
+        )
       })
       .finally(() => {
         this._connecting = null
