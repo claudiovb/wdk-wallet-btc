@@ -72,7 +72,7 @@ export class ISignerBtc extends ISigner {
    * Returns the extended public key (e.g. xpub/tpub).
    *
    * @returns {Promise<string>} The extended public key in base58 format.
-   * @throws {UnsupportedOperationError} If the signer does not support extended keys.
+   * @throws {UnsupportedOperationError} If the signer does not support account derivation.
    */
   async getExtendedPublicKey () {
     throw new NotImplementedError('getExtendedPublicKey()')
