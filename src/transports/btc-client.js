@@ -14,7 +14,8 @@
 'use strict'
 
 import { NotImplementedError } from '@tetherto/wdk-wallet'
-import { address as btcAddress, crypto } from 'bitcoinjs-lib'
+import { address as btcAddress } from 'bitcoinjs-lib'
+import { sha256 } from '@noble/hashes/sha2'
 import { toHex } from 'uint8array-tools'
 
 /** @typedef {import('@tetherto/wdk-wallet').ProviderError} ProviderError */
@@ -158,6 +159,6 @@ export default class IBtcClient {
  */
 export function toScriptHash (address, network) {
   const script = btcAddress.toOutputScript(address, network)
-  const hash = crypto.sha256(script)
+  const hash = sha256(script)
   return toHex(Uint8Array.from(hash).reverse())
 }
