@@ -28,7 +28,7 @@ export class ISignerBtc extends ISigner {
      * Returns the extended public key (e.g. xpub/tpub).
      *
      * @returns {Promise<string>} The extended public key in base58 format.
-     * @throws {UnsupportedOperationError} If the signer does not support extended keys.
+     * @throws {UnsupportedOperationError} If the signer does not support account derivation.
      */
     getExtendedPublicKey(): Promise<string>;
     /**
@@ -45,7 +45,7 @@ export class ISignerBtc extends ISigner {
  *
  * - "legacy": [P2PKH (BIP-44)](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
  * - "segwit": [P2WPKH / native SegWit (BIP-84)](https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki)
- * TODO: Add support for P2SH-wrapped SegWit (BIP-49) and BIP-86 (Taproot).
+ * @todo Add support for P2SH-wrapped SegWit (BIP-49) and BIP-86 (Taproot).
  */
 export type BtcAddressType = "legacy" | "segwit";
 export type BtcSignerConfig = {

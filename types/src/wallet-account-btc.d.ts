@@ -13,18 +13,27 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      * given derivation path.
      *
      * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase or seed bytes.
-     * @param {string | BtcWalletConfig} [path] - The derivation path relative to the BIP root (default: "0'/0/0"). The configuration object may be passed here instead when no path is given.
+     * @param {string} path - The derivation path relative to the BIP root (e.g. "0'/0/0").
      * @param {BtcWalletConfig} [config] - The configuration object.
      * @throws {ValueError} If the given seed phrase is invalid, or the configured bip is not supported.
      */
-    constructor(seed: string | Uint8Array, path?: string | BtcWalletConfig, config?: BtcWalletConfig);
+    constructor(seed: string | Uint8Array, path: string, config?: BtcWalletConfig);
+    /**
+     * Creates a new bitcoin wallet account from a BIP-39 seed, deriving the account's key at the
+     * first account ("0'/0/0") of the configured network and bip.
+     *
+     * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase or seed bytes.
+     * @param {BtcWalletConfig} [config] - The configuration object.
+     * @throws {ValueError} If the given seed phrase is invalid, or the configured bip is not supported.
+     */
+    constructor(seed: string | Uint8Array, config?: BtcWalletConfig);
     /**
      * Creates a new bitcoin wallet account using a signer.
      *
      * @param {ISignerBtc} signer - The signer.
-     * @param {BtcAccountConfig & SignerOptions} [config] - The configuration object. The network and address type are taken from the signer.
+     * @param {Omit<BtcWalletConfig, 'network' | 'bip'> & SignerOptions} [config] - The configuration object. The network and address type are taken from the signer.
      */
-    constructor(signer: ISignerBtc, config?: BtcAccountConfig & SignerOptions);
+    constructor(signer: ISignerBtc, config?: Omit<BtcWalletConfig, "network" | "bip"> & SignerOptions);
     /**
      * If true, disposes the signer on calls to the 'dispose' method.
      *
@@ -144,7 +153,6 @@ export type TransferOptions = import("@tetherto/wdk-wallet").TransferOptions;
 export type TransferResult = import("@tetherto/wdk-wallet").TransferResult;
 export type BtcTransaction = import("./wallet-account-read-only-btc.js").BtcTransaction;
 export type BtcWalletConfig = import("./wallet-account-read-only-btc.js").BtcWalletConfig;
-export type BtcAccountConfig = import("./wallet-account-read-only-btc.js").BtcAccountConfig;
 export type ISignerBtc = import("./signers/signer-btc.js").ISignerBtc;
 export type SignerOptions = {
     /**

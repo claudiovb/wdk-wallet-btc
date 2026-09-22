@@ -12,13 +12,11 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
      *
      * @param {string | Uint8Array} privateKey - The raw private key (hex string or 32 bytes).
      * @param {BtcSignerConfig} [config] - The signer configuration.
-     * @throws {ValueError} If the private key is not 32 bytes, or an unsupported address type is specified.
+     * @throws {ValueError} If the private key is not 32 bytes.
      */
     constructor(privateKey: string | Uint8Array, config?: BtcSignerConfig);
     /** @private */
     private _config;
-    /** @private */
-    private _network;
     /** @private */
     private _account;
     /** @private */
@@ -82,7 +80,7 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
      * Returns the extended public key (e.g. xpub/tpub).
      *
      * @returns {Promise<never>} The extended public key in base58 format.
-     * @throws {UnsupportedOperationError} If the signer does not support extended keys.
+     * @throws {UnsupportedOperationError} If the signer does not support account derivation.
      */
     getExtendedPublicKey(): Promise<never>;
     /**

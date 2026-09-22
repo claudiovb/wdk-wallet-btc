@@ -5,7 +5,6 @@
  * @internal
  * @param {BtcSignerConfig} [config] - The signer configuration.
  * @returns {string} The derivation path prefix (e.g. "84'/0'").
- * @throws {ValueError} If an unsupported address type is specified.
  */
 export function getBtcDerivationPathPrefix(config?: BtcSignerConfig): string;
 /**
@@ -26,7 +25,6 @@ export default class SeedSignerBtc implements ISignerBtc {
      * @param {string} xprv - The extended private key in base58 format.
      * @param {BtcSignerConfig} [config] - The signer configuration.
      * @returns {SeedSignerBtc} The signer instance.
-     * @throws {ValueError} If an unsupported address type is specified.
      */
     static fromXprv(xprv: string, config?: BtcSignerConfig): SeedSignerBtc;
     /**
@@ -35,13 +33,11 @@ export default class SeedSignerBtc implements ISignerBtc {
      * @param {string | Uint8Array} seed - BIP-39 mnemonic or seed bytes.
      * @param {string} [path] - A BIP-32 path (default: the coin-type node for the configured address type and network, e.g. "m/84'/0'"). A signer at the default path derives the standard accounts below it, so it works as a wallet manager's default signer and `derive("0'/0/0")` yields the first account.
      * @param {BtcSignerConfig} [config] - The signer configuration.
-     * @throws {ValueError} If the given seed phrase is invalid, or an unsupported address type is specified.
+     * @throws {ValueError} If the given seed phrase is invalid.
      */
     constructor(seed: string | Uint8Array, path?: string, config?: BtcSignerConfig);
     /** @private */
     private _config;
-    /** @private */
-    private _network;
     /** @private */
     private _account;
     /** @private */
@@ -104,7 +100,7 @@ export default class SeedSignerBtc implements ISignerBtc {
      */
     getAddress(): Promise<string>;
     /**
-     * Returns the extended public key (xpub/zpub/tpub/vpub based on network and BIP).
+     * Returns the extended public key of the signer's node (xpub on mainnet, tpub on testnet and regtest).
      *
      * @returns {Promise<string>} The extended public key in base58 format.
      */

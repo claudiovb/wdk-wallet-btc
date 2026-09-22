@@ -14,14 +14,12 @@
  */
 export function signPsbtWithKey(psbtInstance: Psbt, account: SignerLike): string;
 /**
- * Normalizes the signer configuration with defaults, keeping only the fields signers own.
+ * The address type signers use when the configuration does not specify one.
  *
  * @internal
- * @param {BtcSignerConfig} [config] - The configuration object.
- * @returns {BtcSignerConfig} The normalized configuration.
- * @throws {ValueError} If an unsupported address type is specified.
+ * @type {BtcAddressType}
  */
-export function normalizeConfig(config?: BtcSignerConfig): BtcSignerConfig;
+export const DEFAULT_ADDRESS_TYPE: BtcAddressType;
 /**
  * Maps a wallet-level BIP purpose (44 or 84) to the equivalent signer address type.
  *
@@ -37,10 +35,10 @@ export function getSignerTypeForBip(bip?: 44 | 84): BtcAddressType | undefined;
  * @internal
  * @param {Uint8Array} publicKey - The public key.
  * @param {Network} network - The network configuration.
- * @param {BtcAddressType} [type] - The address type (default: "legacy").
+ * @param {BtcAddressType} type - The address type.
  * @returns {string} The Bitcoin address.
  */
-export function getAddressFromPublicKey(publicKey: Uint8Array, network: Network, type?: BtcAddressType): string;
+export function getAddressFromPublicKey(publicKey: Uint8Array, network: Network, type: BtcAddressType): string;
 /**
  * Signs a message.
  *

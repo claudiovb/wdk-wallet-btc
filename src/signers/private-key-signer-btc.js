@@ -21,7 +21,7 @@ import { UnsupportedOperationError, ValueError } from '@tetherto/wdk-wallet'
 // eslint-disable-next-line camelcase
 import { sodium_memzero } from 'sodium-universal'
 
-import { normalizeConfig, getAddressFromPublicKey, signMessage, signPsbtWithKey } from './utils.js'
+import { DEFAULT_ADDRESS_TYPE, getAddressFromPublicKey, signMessage, signPsbtWithKey } from './utils.js'
 
 /** @typedef {import('./signer-btc.js').ISignerBtc} ISignerBtc */
 /** @typedef {import('./signer-btc.js').BtcSignerConfig} BtcSignerConfig */
@@ -42,11 +42,9 @@ export default class PrivateKeySignerBtc {
    *
    * @param {string | Uint8Array} privateKey - The raw private key (hex string or 32 bytes).
    * @param {BtcSignerConfig} [config] - The signer configuration.
-   * @throws {ValueError} If the private key is not 32 bytes, or an unsupported address type is specified.
+   * @throws {ValueError} If the private key is not 32 bytes.
    */
   constructor (privateKey, config = {}) {
-    config = normalizeConfig(config)
-
     privateKey = typeof privateKey === 'string'
       ? Buffer.from(privateKey, 'hex')
       : Buffer.from(privateKey)
@@ -60,13 +58,11 @@ export default class PrivateKeySignerBtc {
     /** @private */
     this._config = config
     /** @private */
-    this._network = network
-    /** @private */
     this._account = account
     /** @private */
     this._publicKey = account.publicKey
     /** @private */
-    this._address = getAddressFromPublicKey(account.publicKey, network, config.type)
+    this._address = getAddressFromPublicKey(account.publicKey, network, this.type)
   }
 
   /**
@@ -104,7 +100,7 @@ export default class PrivateKeySignerBtc {
    * @type {"bitcoin" | "regtest" | "testnet"}
    */
   get network () {
-    return this._config.network ?? 'bitcoin'
+    return networks[this._config.network] ? this._config.network : 'bitcoin'
   }
 
   /**
@@ -113,7 +109,7 @@ export default class PrivateKeySignerBtc {
    * @type {BtcAddressType}
    */
   get type () {
-    return this._config.type
+    return this._config.type ?? DEFAULT_ADDRESS_TYPE
   }
 
   /**
@@ -153,7 +149,7 @@ export default class PrivateKeySignerBtc {
    * Returns the extended public key (e.g. xpub/tpub).
    *
    * @returns {Promise<never>} The extended public key in base58 format.
-   * @throws {UnsupportedOperationError} If the signer does not support extended keys.
+   * @throws {UnsupportedOperationError} If the signer does not support account derivation.
    */
   async getExtendedPublicKey () {
     throw new UnsupportedOperationError('getExtendedPublicKey()')
@@ -166,7 +162,7 @@ export default class PrivateKeySignerBtc {
    * @returns {Promise<string>} The message's signature.
    */
   async sign (message) {
-    return signMessage(message, this._account.privateKey, this._config.type)
+    return signMessage(message, this._account.privateKey, this.type)
   }
 
   /**

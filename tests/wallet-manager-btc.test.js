@@ -17,6 +17,8 @@ const PRIVATE_KEY_ADDRESS = 'bc1q9lpn7ks92lekmr6m0gpy4qyzyq8g98nufpddma'
 
 // The regtest address of the default account ("m/84'/1'/0'/0/0") for SEED_PHRASE.
 const REGTEST_ACCOUNT_0_ADDRESS = 'bcrt1q8dqnpagwt9rtl7k38nuaa2ahf690avzkm74nhn'
+// The regtest address of the account at index 5 ("m/84'/1'/0'/0/5") for SEED_PHRASE.
+const REGTEST_ACCOUNT_5_ADDRESS = 'bcrt1qzlqkg0jy73dek6pj99lu4qa87v0mqlmjg76uqg'
 
 const NON_DERIVABLE_SIGNER_MESSAGE = 'The default signer must be derivable. Non-derivable signers (e.g. private-key signers) can only be registered by name via addSigner.'
 
@@ -231,6 +233,32 @@ describe('WalletManagerBtc', () => {
       expect(account1._config.client).toBe(wallet._clientList)
 
       wallet.dispose()
+    })
+
+    test('should configure the clients for the network of a supplied default signer', async () => {
+      const bitcoin = new BitcoinCli({
+        host: HOST,
+        port: PORT,
+        zmqPort: ZMQ_PORT,
+        dataDir: DATA_DIR,
+        wallet: 'testwallet'
+      })
+      const waiter = new Waiter(bitcoin, { host: HOST, electrumPort: ELECTRUM_PORT, zmqPort: ZMQ_PORT })
+      const root = new SeedSignerBtc(SEED_PHRASE, "m/84'/1'", { network: 'regtest' })
+      const wallet = new WalletManagerBtc(root, {
+        client: { type: 'electrum', clientConfig: { host: HOST, port: ELECTRUM_PORT } }
+      })
+      bitcoin.sendToAddress(REGTEST_ACCOUNT_5_ADDRESS, 0.02)
+      await waiter.mine()
+
+      const account = await wallet.getAccount(5)
+      const balance = await account.getBalance()
+
+      expect(await account.getAddress()).toBe(REGTEST_ACCOUNT_5_ADDRESS)
+      expect(balance).toBe(2_000_000n)
+
+      wallet.dispose()
+      root.dispose()
     })
   })
 

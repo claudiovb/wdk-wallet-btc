@@ -135,13 +135,6 @@ describe('PrivateKeySignerBtc', () => {
       expect(() => new PrivateKeySignerBtc('ff'.repeat(33)))
         .toThrow('The private key must be 32 bytes.')
     })
-
-    test('should throw for unsupported type specifications', () => {
-      expect(() => new PrivateKeySignerBtc(VALID_PRIVATE_KEY, { type: 'taproot' }))
-        .toThrow(ValueError)
-      expect(() => new PrivateKeySignerBtc(VALID_PRIVATE_KEY, { type: 'taproot' }))
-        .toThrow('Invalid type specification. Supported types: legacy, segwit.')
-    })
   })
 
   describe('keyPair', () => {

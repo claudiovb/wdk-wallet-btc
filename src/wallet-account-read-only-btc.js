@@ -86,25 +86,12 @@ const bitcoinMessage = MessageFactory(ecc)
  */
 
 /**
- * The wallet-level key configuration. Wallet classes map `bip` to the signer's address type
- * (44 → "legacy", 84 → "segwit") when constructing signers.
- *
- * @typedef {Object} BtcKeyConfig
- * @property {"bitcoin" | "regtest" | "testnet"} [network] - The name of the network to use (default: "bitcoin").
- * @property {44 | 84} [bip] - The BIP address type: 44 (P2PKH / legacy) or 84 (P2WPKH / native SegWit) (default: 84).
- */
-
-/**
- * @typedef {Object} BtcAccountConfig
+ * @typedef {Object} BtcWalletConfig
  * @property {IBtcClient | BtcClientDescriptor | Array<IBtcClient | BtcClientDescriptor>} [client] - The bitcoin client, or a list of bitcoin client options for connection fallback.
+ * @property {"bitcoin" | "regtest" | "testnet"} [network] - The name of the network to use (default: "bitcoin").
+ * @property {44 | 84} [bip] - The BIP address type: 44 (P2PKH / legacy) or 84 (P2WPKH / native SegWit) (default: 84). Wallet classes map it to the signer's address type when constructing signers.
  * @property {number} [retries] - The number of retries in the failover mechanism.
  * @property {number | bigint} [transactionMaxFee] - The maximum fee amount for sendTransaction and signTransaction operations.
- */
-
-/**
- * The wallet configuration, joining the key configuration (network, bip) with the account configuration (client, retries, transactionMaxFee).
- *
- * @typedef {BtcKeyConfig & BtcAccountConfig} BtcWalletConfig
  */
 
 /**

@@ -55,7 +55,7 @@ export default class WalletManagerBtc extends WalletManager {
    *
    * @overload
    * @param {ISignerBtc} signer - The default signer.
-   * @param {BtcWalletConfig} [config] - The configuration object.
+   * @param {Omit<BtcWalletConfig, 'network' | 'bip'>} [config] - The configuration object. The network and address type are taken from the signer.
    * @throws {InvalidSignerError} If the default signer does not support account derivation.
    */
   constructor (seedOrSigner, config = {}) {
@@ -69,7 +69,7 @@ export default class WalletManagerBtc extends WalletManager {
     if (!signer.isDerivable) {
       throw new InvalidSignerError('The default signer must be derivable. Non-derivable signers (e.g. private-key signers) can only be registered by name via addSigner.')
     }
-    super(signer, config)
+    super(signer, { ...config, network: signer.network })
 
     /**
      * If true, disposes the default signer on calls to the 'dispose' method.

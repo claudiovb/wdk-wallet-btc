@@ -161,13 +161,6 @@ describe('SeedSignerBtc', () => {
       expect(() => new SeedSignerBtc(VALID_SEED_PHRASE, "a'/b/c"))
         .toThrow(INVALID_PATH_MESSAGE)
     })
-
-    test('should throw for unsupported type specifications', () => {
-      expect(() => new SeedSignerBtc(VALID_SEED_PHRASE, undefined, { type: 'taproot' }))
-        .toThrow(ValueError)
-      expect(() => new SeedSignerBtc(VALID_SEED_PHRASE, undefined, { type: 'taproot' }))
-        .toThrow('Invalid type specification. Supported types: legacy, segwit.')
-    })
   })
 
   describe('keyPair', () => {

@@ -33,7 +33,6 @@ import { compare, fromHex, toHex } from 'uint8array-tools'
 
 /** @typedef {import('./wallet-account-read-only-btc.js').BtcTransaction} BtcTransaction */
 /** @typedef {import('./wallet-account-read-only-btc.js').BtcWalletConfig} BtcWalletConfig */
-/** @typedef {import('./wallet-account-read-only-btc.js').BtcAccountConfig} BtcAccountConfig */
 
 /** @typedef {import('./signers/signer-btc.js').ISignerBtc} ISignerBtc */
 
@@ -70,7 +69,17 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    *
    * @overload
    * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase or seed bytes.
-   * @param {string | BtcWalletConfig} [path] - The derivation path relative to the BIP root (default: "0'/0/0"). The configuration object may be passed here instead when no path is given.
+   * @param {string} path - The derivation path relative to the BIP root (e.g. "0'/0/0").
+   * @param {BtcWalletConfig} [config] - The configuration object.
+   * @throws {ValueError} If the given seed phrase is invalid, or the configured bip is not supported.
+   */
+
+  /**
+   * Creates a new bitcoin wallet account from a BIP-39 seed, deriving the account's key at the
+   * first account ("0'/0/0") of the configured network and bip.
+   *
+   * @overload
+   * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase or seed bytes.
    * @param {BtcWalletConfig} [config] - The configuration object.
    * @throws {ValueError} If the given seed phrase is invalid, or the configured bip is not supported.
    */
@@ -80,7 +89,7 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    *
    * @overload
    * @param {ISignerBtc} signer - The signer.
-   * @param {BtcAccountConfig & SignerOptions} [config] - The configuration object. The network and address type are taken from the signer.
+   * @param {Omit<BtcWalletConfig, 'network' | 'bip'> & SignerOptions} [config] - The configuration object. The network and address type are taken from the signer.
    */
 
   constructor (seedOrSigner, pathOrConfig = {}, config = {}) {
@@ -502,19 +511,19 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
           index: utxo.tx_pos
         }
 
-        if (this._signer.type === 'segwit') {
+        if (this._signer.type === 'legacy') {
+          const prevHex = await getPrevTxHex(utxo.tx_hash)
+          psbt.addInput({
+            ...baseInput,
+            nonWitnessUtxo: fromHex(prevHex)
+          })
+        } else {
           psbt.addInput({
             ...baseInput,
             witnessUtxo: {
               script: fromHex(utxo.vout.scriptPubKey.hex),
               value: utxo.vout.value
             }
-          })
-        } else {
-          const prevHex = await getPrevTxHex(utxo.tx_hash)
-          psbt.addInput({
-            ...baseInput,
-            nonWitnessUtxo: fromHex(prevHex)
           })
         }
       }

@@ -289,25 +289,19 @@ export type BtcElectrumClientDescriptor = {
      */
     clientConfig: Omit<MempoolElectrumConfig, "network">;
 };
-/**
- * The wallet-level key configuration. Wallet classes map `bip` to the signer's address type
- * (44 → "legacy", 84 → "segwit") when constructing signers.
- */
-export type BtcKeyConfig = {
+export type BtcWalletConfig = {
+    /**
+     * - The bitcoin client, or a list of bitcoin client options for connection fallback.
+     */
+    client?: IBtcClient | BtcClientDescriptor | Array<IBtcClient | BtcClientDescriptor>;
     /**
      * - The name of the network to use (default: "bitcoin").
      */
     network?: "bitcoin" | "regtest" | "testnet";
     /**
-     * - The BIP address type: 44 (P2PKH / legacy) or 84 (P2WPKH / native SegWit) (default: 84).
+     * - The BIP address type: 44 (P2PKH / legacy) or 84 (P2WPKH / native SegWit) (default: 84). Wallet classes map it to the signer's address type when constructing signers.
      */
     bip?: 44 | 84;
-};
-export type BtcAccountConfig = {
-    /**
-     * - The bitcoin client, or a list of bitcoin client options for connection fallback.
-     */
-    client?: IBtcClient | BtcClientDescriptor | Array<IBtcClient | BtcClientDescriptor>;
     /**
      * - The number of retries in the failover mechanism.
      */
@@ -317,10 +311,6 @@ export type BtcAccountConfig = {
      */
     transactionMaxFee?: number | bigint;
 };
-/**
- * The wallet configuration, joining the key configuration (network, bip) with the account configuration (client, retries, transactionMaxFee).
- */
-export type BtcWalletConfig = BtcKeyConfig & BtcAccountConfig;
 export type BtcMaxSpendableResult = {
     /**
      * - The maximum spendable amount in satoshis.

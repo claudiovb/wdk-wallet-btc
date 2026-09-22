@@ -52,20 +52,12 @@ export function signPsbtWithKey (psbtInstance, account) {
 }
 
 /**
- * Normalizes the signer configuration with defaults, keeping only the fields signers own.
+ * The address type signers use when the configuration does not specify one.
  *
  * @internal
- * @param {BtcSignerConfig} [config] - The configuration object.
- * @returns {BtcSignerConfig} The normalized configuration.
- * @throws {ValueError} If an unsupported address type is specified.
+ * @type {BtcAddressType}
  */
-export function normalizeConfig (config = {}) {
-  const type = config.type ?? 'segwit'
-  if (!['legacy', 'segwit'].includes(type)) {
-    throw new ValueError('Invalid type specification. Supported types: legacy, segwit.')
-  }
-  return { network: config.network, type }
-}
+export const DEFAULT_ADDRESS_TYPE = 'segwit'
 
 /**
  * Maps a wallet-level BIP purpose (44 or 84) to the equivalent signer address type.
@@ -89,10 +81,10 @@ export function getSignerTypeForBip (bip) {
  * @internal
  * @param {Uint8Array} publicKey - The public key.
  * @param {Network} network - The network configuration.
- * @param {BtcAddressType} [type] - The address type (default: "legacy").
+ * @param {BtcAddressType} type - The address type.
  * @returns {string} The Bitcoin address.
  */
-export function getAddressFromPublicKey (publicKey, network, type = 'legacy') {
+export function getAddressFromPublicKey (publicKey, network, type) {
   const { address } = type === 'legacy'
     ? payments.p2pkh({ pubkey: publicKey, network })
     : payments.p2wpkh({ pubkey: publicKey, network })
@@ -109,5 +101,5 @@ export function getAddressFromPublicKey (publicKey, network, type = 'legacy') {
  * @returns {string} The message's signature.
  */
 export function signMessage (message, privateKey, type) {
-  return toBase64(bitcoinMessage.sign(message, privateKey, true, type === 'segwit' ? { segwitType: 'p2wpkh' } : undefined))
+  return toBase64(bitcoinMessage.sign(message, privateKey, true, type === 'legacy' ? undefined : { segwitType: 'p2wpkh' }))
 }

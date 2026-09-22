@@ -25,7 +25,7 @@ import * as ecc from '@bitcoinerlab/secp256k1'
 import { sodium_memzero } from 'sodium-universal'
 
 import {
-  normalizeConfig,
+  DEFAULT_ADDRESS_TYPE,
   getAddressFromPublicKey,
   signMessage,
   signPsbtWithKey
@@ -59,10 +59,9 @@ initEccLib(ecc)
  * @internal
  * @param {BtcSignerConfig} [config] - The signer configuration.
  * @returns {string} The derivation path prefix (e.g. "84'/0'").
- * @throws {ValueError} If an unsupported address type is specified.
  */
 export function getBtcDerivationPathPrefix (config = {}) {
-  const { network, type } = normalizeConfig(config)
+  const { network, type = DEFAULT_ADDRESS_TYPE } = config
   return `${type === 'legacy' ? 44 : 84}'/${network === 'bitcoin' ? 0 : 1}'`
 }
 
@@ -71,7 +70,6 @@ export function getBtcDerivationPathPrefix (config = {}) {
  * material once the node is built. The node carries the given network's version bytes, so any
  * extended keys serialized from it (xpub/tpub) reflect the configured network.
  *
- * @internal
  * @param {Buffer} seed - The seed buffer.
  * @param {Network} [network] - The network whose version bytes the node should carry (default: bitcoin mainnet).
  * @returns {BIP32Interface} The master node.
@@ -108,9 +106,6 @@ export default class SeedSignerBtc {
   _config
 
   /** @private */
-  _network
-
-  /** @private */
   _account
 
   /** @private */
@@ -128,7 +123,7 @@ export default class SeedSignerBtc {
    * @param {string | Uint8Array} seed - BIP-39 mnemonic or seed bytes.
    * @param {string} [path] - A BIP-32 path (default: the coin-type node for the configured address type and network, e.g. "m/84'/0'").
    * @param {BtcSignerConfig} [config] - The signer configuration.
-   * @throws {ValueError} If the given seed phrase is invalid, or an unsupported address type is specified.
+   * @throws {ValueError} If the given seed phrase is invalid.
    */
   constructor (seed, path, config = {}) {
     if (typeof seed === 'string') {
@@ -139,7 +134,6 @@ export default class SeedSignerBtc {
       seed = bip39.mnemonicToSeedSync(seed)
     }
 
-    config = normalizeConfig(config)
     path = path ?? `m/${getBtcDerivationPathPrefix(config)}`
 
     const network = networks[config.network] || networks.bitcoin
@@ -161,10 +155,8 @@ export default class SeedSignerBtc {
    * @param {string} xprv - The extended private key in base58 format.
    * @param {BtcSignerConfig} [config] - The signer configuration.
    * @returns {SeedSignerBtc} The signer instance.
-   * @throws {ValueError} If an unsupported address type is specified.
    */
   static fromXprv (xprv, config = {}) {
-    config = normalizeConfig(config)
     const network = networks[config.network] || networks.bitcoin
     const node = bip32.fromBase58(xprv, network)
     const signer = Object.create(SeedSignerBtc.prototype)
@@ -208,7 +200,7 @@ export default class SeedSignerBtc {
    * @type {"bitcoin" | "regtest" | "testnet"}
    */
   get network () {
-    return this._config.network ?? 'bitcoin'
+    return networks[this._config.network] ? this._config.network : 'bitcoin'
   }
 
   /**
@@ -217,7 +209,7 @@ export default class SeedSignerBtc {
    * @type {BtcAddressType}
    */
   get type () {
-    return this._config.type
+    return this._config.type ?? DEFAULT_ADDRESS_TYPE
   }
 
   /**
@@ -256,7 +248,7 @@ export default class SeedSignerBtc {
   }
 
   /**
-   * Returns the extended public key (xpub/zpub/tpub/vpub based on network and BIP).
+   * Returns the extended public key of the signer's node (xpub on mainnet, tpub on testnet and regtest).
    *
    * @returns {Promise<string>} The extended public key in base58 format.
    */
@@ -271,7 +263,7 @@ export default class SeedSignerBtc {
    * @returns {Promise<string>} The message's signature.
    */
   async sign (message) {
-    return signMessage(message, this._account.privateKey, this._config.type)
+    return signMessage(message, this._account.privateKey, this.type)
   }
 
   /**
@@ -299,11 +291,11 @@ export default class SeedSignerBtc {
 
   /** @private */
   static _init (signer, account, config, path) {
+    const network = networks[config.network] || networks.bitcoin
     signer._config = config
-    signer._network = networks[config.network] || networks.bitcoin
     signer._account = account
     signer._path = path
     signer._publicKey = account.publicKey
-    signer._address = getAddressFromPublicKey(account.publicKey, signer._network, config.type)
+    signer._address = getAddressFromPublicKey(account.publicKey, network, signer.type)
   }
 }
