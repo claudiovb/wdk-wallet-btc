@@ -70,6 +70,8 @@ Passing a seed phrase wraps it in a `SeedSignerBtc` for you as the default signe
 
 > **Production clients:** The default public Electrum endpoint is provided for convenience. Configure a Bitcoin service you operate or trust for production; public endpoints can be slow or unavailable for addresses with extensive transaction histories. See [Configuration](https://docs.wdk.tether.io/sdk/wallet-modules/wallet-btc/configuration) for Electrum, Blockbook, custom-client, and failover options.
 
+> **TLS/SSL:** Electrum TLS and SSL connections verify the server certificate and hostname. Configure a certificate trusted by the client; self-signed or hostname-mismatched certificates are rejected. The default plaintext TCP transport is unchanged.
+
 ## Documentation
 
 | Topic | Description | Link |
