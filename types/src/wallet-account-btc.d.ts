@@ -4,10 +4,11 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc implement
      * Creates a new bitcoin wallet account from a raw private key.
      *
      * @param {string | Uint8Array} privateKey - The raw private key (hex string or 32 bytes).
-     * @param {BtcWalletConfig} [config] - The wallet configuration options.
+     * @param {Omit<BtcWalletConfig, 'bip'> & Pick<BtcSignerConfig, 'type'>} [config] - The wallet configuration options.
      * @returns {WalletAccountBtc} The wallet account.
+     * @throws {ValueError} If the private key is not 32 bytes.
      */
-    static fromPrivateKey(privateKey: string | Uint8Array, config?: BtcWalletConfig): WalletAccountBtc;
+    static fromPrivateKey(privateKey: string | Uint8Array, config?: Omit<BtcWalletConfig, "bip"> & Pick<BtcSignerConfig, "type">): WalletAccountBtc;
     /**
      * Creates a new bitcoin wallet account from a BIP-39 seed, deriving the account's key at the
      * given derivation path.
@@ -154,6 +155,7 @@ export type TransferResult = import("@tetherto/wdk-wallet").TransferResult;
 export type BtcTransaction = import("./wallet-account-read-only-btc.js").BtcTransaction;
 export type BtcWalletConfig = import("./wallet-account-read-only-btc.js").BtcWalletConfig;
 export type ISignerBtc = import("./signers/signer-btc.js").ISignerBtc;
+export type BtcSignerConfig = import("./signers/signer-btc.js").BtcSignerConfig;
 export type SignerOptions = {
     /**
      * - If true, wipes the signer given at construction on calls to the 'dispose' method.

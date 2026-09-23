@@ -10,6 +10,9 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
     /**
      * Creates a new private key signer.
      *
+     * The supplied key is copied: the signer keeps its own internal copy alive until {@link dispose}
+     * zeroes it, and never wipes the supplied key, whose disposal remains the caller's responsibility.
+     *
      * @param {string | Uint8Array} privateKey - The raw private key (hex string or 32 bytes).
      * @param {BtcSignerConfig} [config] - The signer configuration.
      * @throws {ValueError} If the private key is not 32 bytes.
@@ -99,7 +102,7 @@ export default class PrivateKeySignerBtc implements ISignerBtc {
      */
     signPsbt(psbt: Psbt | string): Promise<string>;
     /**
-     * Disposes the signer, securely erasing the private key from memory.
+     * Disposes the signer, securely erasing its internal copy of the private key from memory.
      */
     dispose(): void;
 }

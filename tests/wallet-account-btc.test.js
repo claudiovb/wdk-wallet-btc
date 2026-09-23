@@ -589,7 +589,7 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
     beforeAll(async () => {
       // Use the known private key for the first address for this bip
       const privHex = ACCOUNTS[bip].keyPair.privateKey
-      accountPk = WalletAccountBtc.fromPrivateKey(privHex, CONFIG)
+      accountPk = WalletAccountBtc.fromPrivateKey(privHex, { ...SIGNER_CONFIG, ...CLIENT_CONFIG })
       recipientPk = bitcoin.getNewAddress()
 
       // Fund the private-key-based address so we can spend
@@ -633,7 +633,7 @@ describe.each([44, 84])(`WalletAccountBtc`, (bip) => {
     })
 
     test('should wipe the internally created signer on disposal', () => {
-      const account = WalletAccountBtc.fromPrivateKey(ACCOUNTS[bip].keyPair.privateKey, { network: 'regtest', bip })
+      const account = WalletAccountBtc.fromPrivateKey(ACCOUNTS[bip].keyPair.privateKey, SIGNER_CONFIG)
 
       expect(account.keyPair.privateKey).not.toBeNull()
 

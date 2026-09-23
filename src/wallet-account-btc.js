@@ -35,6 +35,7 @@ import { compare, fromHex, toHex } from 'uint8array-tools'
 /** @typedef {import('./wallet-account-read-only-btc.js').BtcWalletConfig} BtcWalletConfig */
 
 /** @typedef {import('./signers/signer-btc.js').ISignerBtc} ISignerBtc */
+/** @typedef {import('./signers/signer-btc.js').BtcSignerConfig} BtcSignerConfig */
 
 /**
  * @typedef {Object} SignerOptions
@@ -158,12 +159,13 @@ export default class WalletAccountBtc extends WalletAccountReadOnlyBtc {
    * Creates a new bitcoin wallet account from a raw private key.
    *
    * @param {string | Uint8Array} privateKey - The raw private key (hex string or 32 bytes).
-   * @param {BtcWalletConfig} [config] - The wallet configuration options.
+   * @param {Omit<BtcWalletConfig, 'bip'> & Pick<BtcSignerConfig, 'type'>} [config] - The wallet configuration options.
    * @returns {WalletAccountBtc} The wallet account.
+   * @throws {ValueError} If the private key is not 32 bytes.
    */
   static fromPrivateKey (privateKey, config = {}) {
-    const { network, bip, ...accountConfig } = config
-    const signer = new PrivateKeySignerBtc(privateKey, { network, type: getSignerTypeForBip(bip) })
+    const { network, type, ...accountConfig } = config
+    const signer = new PrivateKeySignerBtc(privateKey, { network, type })
     return new WalletAccountBtc(signer, { ...accountConfig, shouldWipeSignerOnDisposal: true })
   }
 
